@@ -157,6 +157,12 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       ui.num('tfCols', tx.cols || 1, { pre: 'Columns', min: 1, max: 8, step: 1, dec: 0, aria: 'Columns' }, function (v, f) { v = Math.round(v); if (v > 1) { tx.cols = v; if (tx.gap === undefined) tx.gap = 12; } else { delete tx.cols; } ui.live(f); }),
       ui.num('tfGap', tx.gap === undefined ? 12 : tx.gap, { pre: 'Gap', unit: 'pt', min: 0, max: 200, step: 1, dec: 1, aria: 'Column gap' }, function (v, f) { tx.gap = v; ui.live(f); })
     ])];
+    var headText = OP.storyHead(S.doc, it).text;
+    rows.push(h('div', { class: 'row' }, [h('label', { style: 'display:flex;gap:7px;align-items:center;flex:1' }, [(function () {
+      var cb = h('input', { type: 'checkbox', id: 'tfHyph' }); cb.checked = !!headText.hyph;
+      cb.addEventListener('change', function () { if (cb.checked) headText.hyph = true; else delete headText.hyph; ui.live(true); });
+      return cb;
+    })(), 'Hyphenate words at line ends'])]));
     if (story) {
       var i = story.chain.indexOf(it), prev = story.chain[i - 1], next = story.chain[i + 1];
       rows.push(h('p', { class: 'hint', text: 'Box ' + (i + 1) + ' of ' + story.chain.length + ' in a linked story.' }));
@@ -189,13 +195,27 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     else if (it.wa) wordArtProps(root, it);
     else if (it.type === 'image') pictureProps(root, it);
     else if (it.type === 'shape' && it.text && !isEditing()) flowProps(root, it);
+    if (!isEditing()) wrapProps(root, it);
   };
+
+  // ---------------------------------------------------------------- text wrap (this item pushes text aside)
+  function wrapProps(root, it) {
+    var w = it.wrap;
+    var rows = [ui.row('Text nearby', [ui.select('wrMode', w ? w.mode : 'none', [['none', 'Runs over or under this'], ['square', 'Wraps around its box'], ['tight', 'Wraps tightly to its outline']], function (v) {
+      if (v === 'none') delete it.wrap; else it.wrap = { mode: v, dist: w ? w.dist : 6 };
+      OP.reindex(S.doc); ui.live(true); A.refreshPanels();
+    }, 'How nearby text treats this object')], 'wrMode')];
+    if (w) rows.push(ui.row('Distance', [ui.num('wrDist', OP.round(w.dist / MM, 1), { unit: 'mm', min: 0, max: 50, step: 0.5, dec: 1, aria: 'Wrap distance' }, function (v, f) { it.wrap.dist = v * MM; ui.live(f); })], 'wrDist'));
+    if (w) rows.push(h('p', { class: 'hint', text: 'Text in overlapping text boxes on this page flows around this object, on its wider side. While you type in a box the wrap is hidden; it returns when you finish.' }));
+    root.appendChild(ui.sec('Text wrap', rows));
+  }
 
   // ---------------------------------------------------------------- master pages
   A.editMaster = function (id) {
     if (isEditing()) A.endEdit();
     S.master = id || null; S.sel = []; S.cell = null;
     A.refreshAll();
+    A.refreshToolbar();
   };
   function newMaster() {
     var d = S.doc, m = OP.newPage();
@@ -232,6 +252,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (d.merge) root.appendChild(ui.sec('Mail merge', mergeRows()));
   };
   A.insertField = function (name) { insertTextOrBox('{{' + name + '}}'); };
+  /** Enter or leave master-page editing; creates a master for this page if it has none. */
+  A.toggleMaster = function () {
+    if (S.master) { A.editMaster(null); return; }
+    var pg = S.doc.pages[S.pi];
+    if (!pg.master) { var m = newMaster(); pg.master = m.id; A.commit(); }
+    A.editMaster(pg.master);
+  };
 
   // ---------------------------------------------------------------- mail merge
   /** Parse CSV or tab-separated text into rows of strings. */
@@ -382,6 +409,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     });
     return [title, tb];
   }
+  A.userBlocks = function () { return userBlocks(); };
   function userBlocks() { try { return JSON.parse(localStorage.getItem('openpub.blocks') || '[]'); } catch (e) { return []; } }
   function saveUserBlocks(list) { try { localStorage.setItem('openpub.blocks', JSON.stringify(list)); return true; } catch (e) { A.toast('The block could not be saved in this browser (it may be too large).', true); return false; } }
 
@@ -434,6 +462,14 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       body.push(h('h3', { text: cat, style: 'margin:6px 0 0;font-size:13px' }));
       body.push(h('div', { class: 'blkgrid' }, BLOCKS.filter(function (b) { return b.cat === cat; }).map(function (b) {
         return card(b.name, b.make(u), null, function () { A.closeModal(); placeBlock(b.make(u), null); });
+      })));
+    });
+    // blocks from content packs and plug-ins
+    (A.extraBlockGroups ? A.extraBlockGroups(u) : []).forEach(function (g) {
+      if (!g.blocks.length) return;
+      body.push(h('h3', { text: g.cat, style: 'margin:6px 0 0;font-size:13px' }));
+      body.push(h('div', { class: 'blkgrid' }, g.blocks.map(function (b) {
+        return card(b.name, OP.clone(b.items), b.assets, function () { A.closeModal(); placeBlock(OP.clone(b.items), b.assets); });
       })));
     });
     var sel = A.selItems();
@@ -650,7 +686,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (A.modalOpen()) return;
     var mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (mod && k === 'f') { e.preventDefault(); A.dlgFind(); }
-    else if (mod && k === 'p') { e.preventDefault(); A.dlgSheets('print'); }
+    else if (mod && k === 'p') { e.preventDefault(); if (e.shiftKey || !OP.desktop || !A.printNow) A.dlgSheets('print'); else A.printNow(); }
     else if (e.key === 'F7') { e.preventDefault(); A.dlgSpell(); }
     else if (mod && e.shiftKey && k === 's' && OP.desktop) { e.preventDefault(); A.saveProject(true); }
   }, true);

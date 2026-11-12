@@ -108,6 +108,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       return true;
     } catch (e) { fail(e); return false; }
   };
+  A.projectObject = function () { return projectObject(); };
   A.setTitle = function () { document.title = (S.doc ? S.doc.name : 'Untitled') + (S.dirty ? ' •' : '') + ' – OpenPub'; };
 
   var DB = 'openpub', STORE = 'kv', autosaveTimer = 0;
@@ -402,7 +403,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         ['Space + drag, or middle button', 'Pan the page'],
         ['Ctrl+0 / Ctrl+1', 'Fit page / actual size'],
         ['Ctrl+S / Ctrl+O', 'Save project / open'],
-        ['Ctrl+F / F7 / Ctrl+P', 'Find and replace / spelling / print and PDF layouts'],
+        ['Ctrl+F / F7', 'Find and replace / spelling'],
+        ['Ctrl+P / Ctrl+Shift+P', 'Print with the system dialog / print layouts and PDF'],
+        ['Ctrl+F1', 'Hide or show the ribbon (or double-click a tab)'],
         ['Tab (in a table)', 'Next cell; Shift+Tab goes back']
       ]),
       h('p', { class: 'hint', text: 'Drag from a ruler to make a guide; drag a guide back to the ruler to remove it. Drop pictures or a .pub file anywhere on the page. Paste pictures straight from the clipboard.' })
@@ -426,8 +429,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       head('Not possible'),
       list(['Saving back to .pub. The format is undocumented; work is saved as an .opub project and exported as PDF, PNG, JPEG or SVG',
         'Publisher 98, 2000 and older files',
-        'Text wrapping around pictures, hyphenation, catalogue merge, design checker, spot-colour separations, ICC colour management',
-        OP.desktop ? 'CMYK output is a picture PDF using a plain conversion without a colour profile' : 'Vector PDF, printing and the spelling checker need the desktop app; CMYK output is a picture PDF without a colour profile'])
+        'Catalogue merge, design checker, spot-colour separations, text on both sides of a wrapped object',
+        OP.desktop ? 'Vector CMYK needs Ghostscript installed on this computer (it is not bundled); without it CMYK output is a picture PDF with no colour profile' : 'Vector PDF, printing, the spelling checker and script plug-ins need the desktop app'])
     ], null, { wide: true });
   };
 
@@ -518,7 +521,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       OP.desktop.initialFile().then(function (f) {
         if (f && f.bytes) A.openFile(f); else readAutosave().then(welcome);
       }, function () { readAutosave().then(welcome); });
+      A.loadLocalFonts(true); // every installed font is available without asking
     } else readAutosave().then(welcome);
+    if (A.initPlugins) A.initPlugins();
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', A.init);

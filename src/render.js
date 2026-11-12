@@ -114,7 +114,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         if (col.y + ln.y > it.h) return;
         ln.segs.forEach(function (s) {
           if (s.css !== lastCss) { ctx.font = s.css; lastCss = s.css; }
-          OP.setLetterSpacing(ctx, s.run, scale);
+          OP.setLetterSpacingPx(ctx, s.sp);
           ctx.fillStyle = s.run.color || '#000000';
           var x = col.x + s.x, y = col.y + ln.base;
           if (s.text) ctx.fillText(s.text, x, y);
@@ -126,10 +126,11 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         });
       });
     });
-    OP.setLetterSpacing(ctx, null, 1);
+    OP.setLetterSpacingPx(ctx, 0);
     ctx.restore();
   }
   OP.drawTextCols = drawTextCols;
+  OP.drawCropped = function (ctx, c, crop, w, h) { drawCropped(ctx, c, crop, w, h); };
   OP.fillStyleFor = fillStyle;
 
   /** CSS filter string for a picture's adjustments, or '' when there are none. */

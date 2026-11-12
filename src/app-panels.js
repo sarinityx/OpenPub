@@ -173,6 +173,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   A.closeMenus = function () {
     Array.prototype.forEach.call(document.querySelectorAll('.menu.open, .pop.open'), function (m) { m.classList.remove('open'); });
   };
+  A.centreOnPage = function (how) { centreOnPage(how); };
   function centreOnPage(how) {
     var items = A.selItems().filter(function (it) { return !it.locked; });
     if (!items.length) return;
@@ -551,14 +552,16 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     Object.keys(names).sort().forEach(function (n) { dl.appendChild(h('option', { value: n })); });
   };
   /** Chrome and Edge can list installed fonts after the user allows it. */
-  A.loadLocalFonts = async function () {
-    if (!window.queryLocalFonts) { A.toast('This browser cannot list installed fonts. Type the font name instead.'); return; }
+  /** Read the fonts installed on this computer into the font list. quiet = no messages (start-up). */
+  A.loadLocalFonts = async function (quiet) {
+    if (!window.queryLocalFonts) { if (!quiet) A.toast('This browser cannot list installed fonts. Type the font name instead.'); return 0; }
     try {
       var fonts = await window.queryLocalFonts(), seen = {};
       fonts.forEach(function (f) { seen[f.family] = true; });
       localFonts = Object.keys(seen);
       A.updateFontList();
-      A.toast(localFonts.length + ' installed font families added to the font list.');
-    } catch (e) { A.toast('Installed fonts could not be listed: ' + e.message, true); }
+      if (!quiet) A.toast(localFonts.length + ' installed font families added to the font list.');
+      return localFonts.length;
+    } catch (e) { if (!quiet) A.toast('Installed fonts could not be listed: ' + e.message, true); return 0; }
   };
 })();

@@ -4,11 +4,14 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell, session } = require('e
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { spawn, spawnSync } = require('child_process');
+const { pureBlackToGray } = require('./pdfblack');
 
 let win = null;
 let pendingFile = null;   // file passed on the command line before the window was ready
 let closing = false;
 let lastDir = null;
+const knownPaths = new Set(); // files the user picked in a dialog or opened; only these may be overwritten without asking
 
 const DOC_EXT = /\.(pub|opub|json)$/i;
 function fileFromArgv(argv) {
@@ -18,6 +21,7 @@ function fileFromArgv(argv) {
   return null;
 }
 function readDoc(p) {
+  knownPaths.add(p);
   try { return { name: path.basename(p), path: p, bytes: new Uint8Array(fs.readFileSync(p)) }; }
   catch (e) { return { name: path.basename(p), path: p, error: e.message }; }
 }
@@ -43,6 +47,7 @@ app.on('window-all-closed', () => app.quit());
 
 function start() {
   pendingFile = fileFromArgv(process.argv);
+  if (pendingFile) knownPaths.add(pendingFile);
   const ses = session.defaultSession;
   // the font list ("Add installed fonts") needs this permission; nothing else is granted
   ses.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'local-fonts'));
@@ -110,7 +115,8 @@ ipcMain.handle('file:open', async () => {
 const FILTERS = { opub: 'OpenPub project', pdf: 'PDF document', png: 'PNG picture', jpg: 'JPEG picture', svg: 'SVG drawing', zip: 'ZIP archive' };
 ipcMain.handle('file:save', async (e, o) => {
   try {
-    let target = o.path || null;
+    // a path is honoured only if the user chose it in a dialog this session (plug-ins run in the page)
+    let target = (o.path && knownPaths.has(o.path)) ? o.path : null;
     if (!target) {
       const ext = (path.extname(o.name || '').slice(1) || 'bin').toLowerCase();
       const r = await dialog.showSaveDialog(win, { title: 'Save', defaultPath: path.join(startDir(), o.name || 'Untitled'),
@@ -119,6 +125,7 @@ ipcMain.handle('file:save', async (e, o) => {
       target = r.filePath;
     }
     fs.writeFileSync(target, Buffer.from(o.bytes));
+    knownPaths.add(target);
     lastDir = path.dirname(target);
     return { path: target, name: path.basename(target) };
   } catch (err) { return { error: 'The file could not be saved: ' + err.message }; }
@@ -155,6 +162,88 @@ ipcMain.handle('print', async (e, o) => {
       (ok, reason) => resolve(ok ? { ok: true } : (reason && !/cancel/i.test(reason) ? { error: 'Printing failed: ' + reason } : { cancelled: true })));
     }));
   } catch (err) { return { error: 'Printing failed: ' + err.message }; }
+});
+
+// ---------------------------------------------------------------- CMYK through Ghostscript (not bundled; used when installed)
+function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
+function readSettings() { try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) || {}; } catch (e) { return {}; } }
+function writeSettings(patch) {
+  const s = Object.assign(readSettings(), patch);
+  try { fs.mkdirSync(path.dirname(settingsPath()), { recursive: true }); fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2), 'utf8'); } catch (e) { /* best effort */ }
+  return s;
+}
+function isFile(p) { try { return fs.statSync(p).isFile(); } catch (e) { return false; } }
+function findGhostscript() {
+  const set = readSettings();
+  if (set.gsPath && isFile(set.gsPath)) return set.gsPath;
+  const names = process.platform === 'win32' ? ['gswin64c.exe', 'gswin32c.exe', 'gs.exe'] : ['gs'];
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    for (const n of names) { if (dir && isFile(path.join(dir, n))) return path.join(dir, n); }
+  }
+  if (process.platform === 'win32') {
+    const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.ProgramW6432].filter(Boolean);
+    for (const root of roots) {
+      let versions = [];
+      try { versions = fs.readdirSync(path.join(root, 'gs')).sort().reverse(); } catch (e) { versions = []; }
+      for (const v of versions) for (const n of names) { const c = path.join(root, 'gs', v, 'bin', n); if (isFile(c)) return c; }
+    }
+  }
+  return null;
+}
+function gsStatus() {
+  const gs = findGhostscript(), set = readSettings();
+  let version = '';
+  if (gs) { try { version = String(spawnSync(gs, ['--version'], { encoding: 'utf8', timeout: 15000, windowsHide: true }).stdout || '').trim().split(/\s+/)[0]; } catch (e) { version = ''; } }
+  const icc = set.iccPath && isFile(set.iccPath) ? set.iccPath : null;
+  return { found: !!gs && !!version, path: gs, version: version, icc: icc, iccName: icc ? path.basename(icc) : '' };
+}
+ipcMain.handle('gs:status', () => gsStatus());
+ipcMain.handle('gs:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Locate Ghostscript (gswin64c.exe)', properties: ['openFile'],
+    defaultPath: process.platform === 'win32' ? path.join(process.env.ProgramFiles || 'C:\\Program Files', 'gs') : '/usr/bin',
+    filters: process.platform === 'win32' ? [{ name: 'Ghostscript', extensions: ['exe'] }] : [{ name: 'All files', extensions: ['*'] }] });
+  if (!r.canceled && r.filePaths.length) writeSettings({ gsPath: r.filePaths[0] });
+  return gsStatus();
+});
+ipcMain.handle('icc:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose a CMYK output profile', properties: ['openFile'],
+    defaultPath: process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'spool', 'drivers', 'color') : startDir(),
+    filters: [{ name: 'ICC colour profiles', extensions: ['icc', 'icm'] }] });
+  if (r.canceled || !r.filePaths.length) return null;
+  writeSettings({ iccPath: r.filePaths[0] });
+  return gsStatus();
+});
+ipcMain.handle('icc:clear', () => { writeSettings({ iccPath: null }); return gsStatus(); });
+ipcMain.handle('pdf:cmyk', async (e, o) => {
+  const st = gsStatus();
+  if (!st.found) return { error: 'Ghostscript was not found on this computer.' };
+  const stamp = process.pid + '-' + Date.now();
+  const src = path.join(app.getPath('temp'), 'openpub-rgb-' + stamp + '.pdf'), out = path.join(app.getPath('temp'), 'openpub-cmyk-' + stamp + '.pdf');
+  try {
+    const data = await withSheetWindow(o, (w) => w.webContents.printToPDF({
+      printBackground: true, preferCSSPageSize: true, margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      pageSize: { width: Math.max(0.5, o.wMm / 25.4), height: Math.max(0.5, o.hMm / 25.4) }
+    }));
+    // pure black is handed to Ghostscript as grey so it stays on the black plate only
+    fs.writeFileSync(src, o.keepBlack === false ? data : pureBlackToGray(Buffer.from(data)));
+    const args = ['-dSAFER', '-dBATCH', '-dNOPAUSE', '-dQUIET', '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4',
+      '-sColorConversionStrategy=CMYK', '-dProcessColorModel=/DeviceCMYK', '-dOverrideICC=true'];
+    if (st.icc) args.push('--permit-file-read=' + st.icc, '-sOutputICCProfile=' + st.icc);
+    args.push('-sOutputFile=' + out, src);
+    const res = await new Promise((resolve) => {
+      let err = '';
+      const child = spawn(st.path, args, { windowsHide: true });
+      const timer = setTimeout(() => { try { child.kill(); } catch (e2) { /* gone */ } resolve({ code: -1, err: 'Ghostscript took longer than five minutes and was stopped.' }); }, 300000);
+      child.stderr.on('data', (d) => { err += d; });
+      child.stdout.on('data', (d) => { err += d; });
+      child.on('error', (e2) => { clearTimeout(timer); resolve({ code: -1, err: e2.message }); });
+      child.on('close', (code) => { clearTimeout(timer); resolve({ code: code, err: err }); });
+    });
+    if (res.code !== 0 || !isFile(out)) return { error: 'Ghostscript could not convert the PDF' + (res.err ? ': ' + String(res.err).trim().split(/\r?\n/).slice(-3).join(' ') : '.') };
+    return { bytes: new Uint8Array(fs.readFileSync(out)), profile: st.iccName || 'Ghostscript default CMYK', version: st.version };
+  } catch (err) { return { error: 'The CMYK PDF could not be made: ' + err.message }; } finally {
+    fs.unlink(src, () => {}); fs.unlink(out, () => {});
+  }
 });
 
 // ---------------------------------------------------------------- spelling (Australian English)
