@@ -1,2 +1,0 @@
-# OpenPub
-OpenPub Poster Studio
