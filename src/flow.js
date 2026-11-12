@@ -51,11 +51,12 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   var indexes = new WeakMap();
   /** Rebuild the id -> item map and the link map of a document. Cheap; called before every render. */
   OP.reindex = function (doc) {
-    var map = {}, prev = {}, pageOf = {}, linked = false;
+    var map = {}, prev = {}, pageOf = {}, linked = false, wraps = {};
     function scan(pg, pi) {
       pg.items.forEach(function (it) {
         map[it.id] = it; pageOf[it.id] = pi;
         if (it.next) linked = true;
+        if (it.wrap && pi >= 0) (wraps[pi] = wraps[pi] || []).push(it); // obstacles text wraps around
       });
     }
     doc.pages.forEach(scan);
@@ -64,7 +65,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var nx = map[id].next;
       if (nx && map[nx] && map[nx].type === 'shape' && !prev[nx] && nx !== id) prev[nx] = id;
     });
-    var ix = { map: map, prev: prev, pageOf: pageOf, linked: linked };
+    var ix = { map: map, prev: prev, pageOf: pageOf, linked: linked, wraps: wraps };
     indexes.set(doc, ix);
     return ix;
   };
@@ -113,7 +114,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var head = story ? story.head : it;
     if (!head.text) return null;
     var paras = OP.prepParas(head.text.paras, env);
-    if (!story && ncols === 1) {
+    var wrapOf = {}, anyWrap = false;
+    if (doc && OP.wrapProfile) (story ? story.chain : [it]).forEach(function (b) { var wp = OP.wrapProfile(doc, b); if (wp) { wrapOf[b.id] = wp; anyWrap = true; } });
+    if (!story && ncols === 1 && !anyWrap) {
       var src = it;
       if (paras !== it.text.paras) {
         src = { id: it.id + '~' + OP.envSig(env), w: it.w, h: it.h, text: { paras: paras, pad: it.text.pad, valign: it.text.valign, fit: it.text.fit } };
@@ -124,19 +127,21 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var boxes = story ? story.chain : [it], frames = [], geo = '';
     boxes.forEach(function (b) {
       boxFrames(b).forEach(function (f) { frames.push(f); geo += f.w.toFixed(2) + 'x' + f.h.toFixed(2) + ';'; });
-      geo += (b.text ? b.text.valign : '') + '|';
+      geo += (b.text ? b.text.valign : '') + '|' + (wrapOf[b.id] ? wrapOf[b.id].sig : '') + '|';
     });
-    var key = geo + JSON.stringify(paras), ck = head.id + '~' + OP.envSig(env), hit = flowCache[ck];
+    var hyph = !!head.text.hyph;
+    var key = geo + (hyph ? 'H' : '') + JSON.stringify(paras), ck = head.id + '~' + OP.envSig(env), hit = flowCache[ck];
     if (!hit || hit.key !== key) {
       var rem = paras, byBox = {}, overflow = false;
       frames.forEach(function (f, i) {
-        var mine = rem;
+        var mine = rem, wp = wrapOf[f.box.id], opt = { hyph: hyph };
+        if (wp) opt.avail = function (y, h) { return wp.avail(f.x, f.y, f.w, y, h); };
         if (i < frames.length - 1) {
-          if (rem.length) { var parts = OP.splitParasAtHeight(rem, f.w, f.h); mine = parts[0]; rem = parts[1]; }
+          if (rem.length) { var parts = OP.splitParasAtHeight(rem, f.w, f.h, opt); mine = parts[0]; rem = parts[1]; }
         } else rem = [];
-        var l = mine.length ? OP.layoutParas(mine, f.w, 1) : { lines: [], height: 0 };
+        var l = mine.length ? OP.layoutParas(mine, f.w, 1, opt) : { lines: [], height: 0 };
         var oy = 0, single = boxFrames(f.box).length === 1, va = f.box.text ? f.box.text.valign : 'top';
-        if (single && l.height < f.h) oy = va === 'middle' ? (f.h - l.height) / 2 : va === 'bottom' ? f.h - l.height : 0;
+        if (single && !wp && l.height < f.h) oy = va === 'middle' ? (f.h - l.height) / 2 : va === 'bottom' ? f.h - l.height : 0;
         if (i === frames.length - 1 && l.height > f.h + 1) overflow = true;
         (byBox[f.box.id] = byBox[f.box.id] || []).push({ x: f.x, y: f.y + oy, w: f.w, h: f.h, lay: { lines: l.lines, height: l.height, scale: 1 } });
       });

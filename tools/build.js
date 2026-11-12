@@ -1,8 +1,8 @@
 // Bundles app/src into a single self-contained HTML file: app/dist/OpenPub.html
 const fs = require('fs'), path = require('path');
 const SRC = path.join(__dirname, '..', 'app', 'src'), DIST = path.join(__dirname, '..', 'app', 'dist');
-const ORDER = ['util', 'cfb', 'model', 'geometry', 'wmf', 'emf', 'layout', 'flow', 'table', 'wordart', 'pub', 'pubconv', 'render', 'export',
-  'app-core', 'app-input', 'app-text', 'app-panels', 'app-extra', 'app-print', 'app-main'];
+const ORDER = ['util', 'cfb', 'model', 'geometry', 'wmf', 'emf', 'layout', 'hyph', 'flow', 'wrap', 'table', 'wordart', 'pub', 'pubconv', 'render', 'export',
+  'app-core', 'app-input', 'app-text', 'app-panels', 'app-extra', 'app-print', 'app-ribbon', 'app-plugins', 'app-main'];
 const js = ORDER.map(m => {
   const s = fs.readFileSync(path.join(SRC, m + '.js'), 'utf8');
   if (/<\/script/i.test(s)) throw new Error(m + '.js contains </script');

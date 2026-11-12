@@ -345,7 +345,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
             var sz = s.run.size * sc, x = col.x + s.x, y = col.y + ln.base, colr = esc(s.run.color || '#000000');
             if (s.text) {
               g += '<text x="' + r(x) + '" y="' + r(y) + '" font-family="' + esc(OP.fontStack(s.run.font).replace(/"/g, "'")) + '" font-size="' + r(sz) + '"' +
-                (s.run.b ? ' font-weight="bold"' : '') + (s.run.i ? ' font-style="italic"' : '') + (s.run.sp ? ' letter-spacing="' + r(s.run.sp * sc) + '"' : '') +
+                (s.run.b ? ' font-weight="bold"' : '') + (s.run.i ? ' font-style="italic"' : '') + (s.sp ? ' letter-spacing="' + r(s.sp, 3) + '"' : '') +
                 ' fill="' + colr + '" xml:space="preserve">' + esc(s.text) + '</text>';
             }
             if (s.run.u) g += '<rect x="' + r(x) + '" y="' + r(y + sz * 0.1) + '" width="' + r(s.w) + '" height="' + r(Math.max(0.5, sz / 16)) + '" fill="' + colr + '"/>';

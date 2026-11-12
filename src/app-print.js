@@ -155,14 +155,23 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         rowL('Sheets', [field('shCount', 1, '', 1, 500)], 'shCount')
       ]),
       h('div', { class: 'row' }, [h('label', { text: 'Print marks' }), check('shBleed', 'Include bleed', d.bleed > 0), check('shMarks', 'Crop marks', false)]),
-      rowL('Output', [sel('shOut', desk ? 'vector' : 'raster', (desk ? [['vector', 'Vector PDF (sharp, selectable text, fonts embedded)']] : []).concat([['raster', 'Picture PDF, RGB'], ['cmyk', 'Picture PDF, CMYK']]))], 'shOut'),
+      rowL('Output', [sel('shOut', desk ? 'vector' : 'raster', (desk ? [['vector', 'Vector PDF (sharp, selectable text, fonts embedded)'], ['vcmyk', 'Vector PDF, CMYK (needs Ghostscript)']] : []).concat([['raster', 'Picture PDF, RGB'], ['cmyk', 'Picture PDF, CMYK']]))], 'shOut'),
+      h('div', { id: 'shGs', hidden: true, style: 'display:flex;flex-direction:column;gap:7px' }, [
+        h('div', { class: 'note', id: 'shGsInfo', text: 'Looking for Ghostscript…' }),
+        h('div', { class: 'row wrap' }, [
+          ui.btn('Locate Ghostscript…', function () { OP.desktop.gsPick().then(function (st) { gs = st; update(); }); }),
+          ui.btn('Choose output profile…', function () { OP.desktop.iccPick().then(function (st) { if (st) { gs = st; update(); } }); }),
+          ui.btn('Use Ghostscript\'s default CMYK', function () { OP.desktop.iccClear().then(function (st) { gs = st; update(); }); })])
+      ]),
       rowL('Resolution', [sel('shDpi', '300', [['150', '150 dpi'], ['200', '200 dpi'], ['300', '300 dpi'], ['600', '600 dpi']])], 'shDpi'),
       info, prog
     ];
     var buttons = [{ label: 'Cancel' }];
     if (OP.desktop && OP.desktop.print) buttons.push({ label: 'Print…', id: 'shPrint', fn: function () { run(true); return false; } });
     buttons.push({ label: 'Save PDF…', cls: 'primary', id: 'shGo', fn: function () { run(false); return false; } });
-    var dlg = A.modal(mode === 'merge' ? 'Export mail merge' : 'Print and PDF', body, buttons, { wide: true });
+    var dlg = A.modal(mode === 'merge' ? 'Export mail merge' : 'Print layouts and PDF', body, buttons, { wide: true });
+    var gs = null;
+    if (desk && OP.desktop.gsStatus) OP.desktop.gsStatus().then(function (st) { gs = st; if ($('shOut')) update(); }, function () { gs = { found: false }; });
 
     function recs() {
       var v = mg && $('shRec') ? $('shRec').value : 'none';
@@ -187,7 +196,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       if ($('shPages')) $('shPages').disabled = lay !== 'one';
       $('shBleed').disabled = lay !== 'one' || !(d.bleed > 0);
       $('shMarks').disabled = lay === 'book';
-      $('shDpi').disabled = out === 'vector';
+      $('shDpi').disabled = out === 'vector' || out === 'vcmyk';
+      $('shGs').hidden = out !== 'vcmyk';
+      if (out === 'vcmyk') {
+        $('shGsInfo').textContent = !gs ? 'Looking for Ghostscript…' : gs.found
+          ? 'Ghostscript ' + (gs.version || '') + ' found. Output profile: ' + (gs.iccName || 'Ghostscript default CMYK') + '. Ask your printer which profile they want (for example a FOGRA or GRACoL profile) and choose its .icc file.'
+          : 'Ghostscript is not installed on this computer, or was not found. Install it from ghostscript.com (it is free under the AGPL and is not bundled with OpenPub), then choose Locate Ghostscript.';
+      }
       if ($('shCount')) $('shCount').disabled = rs.length > 1;
       var ok = true;
       if (lay === 'nup') {
@@ -202,9 +217,10 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         msg = cnt + (cnt === 1 ? ' sheet.' : ' sheets.');
       }
       if (out === 'cmyk') msg += ' CMYK is a plain conversion without a colour profile: pure black text prints on the black plate only, but colours are not proofed. Ask your printer whether they prefer RGB.' + (lay !== 'one' ? ' CMYK output is only available with “One page per sheet”.' : '');
+      if (out === 'vcmyk') msg += ' Everything stays vector and is converted to CMYK. Pure black text and lines stay on the black plate only; every other colour is converted with the output profile. Ask your printer for a proof before a large run.';
       if (out === 'vector') msg += ' Pictures keep their original pixels; shadows and picture adjustments are flattened to images by the PDF engine.';
       info.textContent = msg;
-      $('shGo').disabled = !ok || (out === 'cmyk' && lay !== 'one');
+      $('shGo').disabled = !ok || (out === 'cmyk' && lay !== 'one') || (out === 'vcmyk' && !(gs && gs.found));
       if ($('shPrint')) $('shPrint').disabled = !ok;
     }
     ['shLay', 'shPages', 'shRec', 'shPaper', 'shMargin', 'shGap', 'shCount', 'shBleed', 'shMarks', 'shOut', 'shDpi'].forEach(function (id) {
@@ -230,6 +246,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         }
         var blob;
         if (out === 'vector') { setP(0.3); blob = await OP.sheetsVectorPdf(d, sheets); }
+        else if (out === 'vcmyk') {
+          setP(0.3);
+          var cres = await OP.desktop.cmykPdf(OP.sheetsHtml(d, sheets));
+          if (!cres || cres.error) throw new Error((cres && cres.error) || 'The CMYK PDF could not be made.');
+          blob = new Blob([cres.bytes], { type: 'application/pdf' });
+          base += '-cmyk';
+        }
         else if (lay === 'one') {
           var rs = recs();
           blob = (await OP.exportPdf(d, { pages: pagesSel(), dpi: dpi, bleed: $('shBleed').checked, marks: $('shMarks').checked, cmyk: out === 'cmyk', records: rs, onProgress: setP })).blob;
@@ -243,5 +266,18 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       }
     }
   };
-  void ui;
+  /** Print straight away with the system print dialog: every page, one per sheet. */
+  A.printNow = async function () {
+    if (!OP.desktop || !OP.desktop.print) { A.dlgSheets('print'); return; }
+    if (A.isEditing()) A.endEdit();
+    var d = S.doc;
+    try {
+      await OP.ensureImages(d);
+      A.status('Opening the print dialog…');
+      var res = await OP.desktop.print(OP.sheetsHtml(d, OP.sheetsPlain(d, d.pages.map(function (_, i) { return i; }), [undefined], { bleed: false, marks: false })));
+      A.status('');
+      if (res && res.error) A.toast(res.error, true);
+      else A.toast(res && res.cancelled ? 'Printing cancelled.' : 'Sent to the printer.');
+    } catch (e) { A.status(''); A.toast((e && e.message) || 'Printing failed.', true); }
+  };
 })();

@@ -179,6 +179,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     out.valign = t.valign || 'top';
     if (Array.isArray(t.pad) && t.pad.length === 4) out.pad = t.pad.map(function (v) { return +v || 0; });
     out.fit = t.fit === 'shrink' ? 'shrink' : 'none';
+    if (t.hyph) out.hyph = true;
     if (+t.cols > 1) { out.cols = Math.min(8, Math.round(+t.cols)); out.gap = isFinite(+t.gap) ? +t.gap : 12; }
     return out;
   }
@@ -212,6 +213,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     it.name = s.name ? String(s.name) : '';
     it.group = s.group || null;
     it.shadow = s.shadow || null;
+    if (s.wrap && (s.wrap.mode === 'square' || s.wrap.mode === 'tight')) it.wrap = { mode: s.wrap.mode, dist: Math.max(0, +s.wrap.dist || 0) };
     if (s.type === 'table') return it;
     if (s.type === 'image') {
       if (s.crop) it.crop = { l: +s.crop.l || 0, t: +s.crop.t || 0, r: +s.crop.r || 0, b: +s.crop.b || 0 };
