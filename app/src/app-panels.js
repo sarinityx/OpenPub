@@ -383,8 +383,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 
   function buildTextProps(root, it, texts) {
     var st = A.textState() || OP.DEFAULT_RUN, tx = it.text;
-    var font = h('input', { type: 'text', id: 'tFont', list: 'fontlist', 'aria-label': 'Font', spellcheck: 'false' });
+    var font = h('input', { type: 'text', id: 'tFont', 'aria-label': 'Font', spellcheck: 'false' });
     font.value = st.font;
+    if (A.fontPicker) A.fontPicker(font);
     font.addEventListener('change', function () { if (font.value.trim()) { A.applyRunStyle({ font: font.value.trim() }); A.refreshTextControls(); } });
     font.addEventListener('focus', function () { font.select(); });
     var rows = [

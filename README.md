@@ -1,33 +1,52 @@
-# OpenPub 1.1 – source
+# OpenPub
 
-- `src/` – the editor and the .pub parser (plain JavaScript, no runtime dependencies). `tools/build.js` bundles it into one HTML file.
-- `desktop/` – the Electron shell (`main.js`, `preload.js`, `pdfblack.js`), the Australian English dictionary and a pre-built `app/OpenPub.html`.
-- `examples/` – sample plug-in, sample content pack and `PLUGINS.md`.
-- `tools/` – build script and the test suites (paths inside them point at the original build machine; adjust before running).
+A desktop page-layout editor that opens Microsoft Publisher (`.pub`) files. Built because Microsoft retires Publisher in October 2026.
 
-## Module order (see `tools/build.js`)
+- Opens `.pub` files from Publisher 2002 to 2021 / Microsoft 365. Publisher 98 and 2000 files are rejected.
+- Saves projects as `.opub`. It cannot save `.pub`.
+- Exports PDF (vector, picture, CMYK), PNG, JPEG and SVG; prints through the system print dialog, with n-up, booklet and tiled poster layouts.
+- Tables, linked text boxes, columns, text wrap, hyphenation, WordArt, master pages, mail merge, building blocks, templates, spell check (Australian English), plug-ins and content packs.
 
-util, cfb, model, geometry, wmf, emf, layout, hyph, flow, wrap, table, wordart, pub, pubconv, render, export,
-app-core, app-input, app-text, app-panels, app-extra, app-print, app-ribbon, app-plugins, app-main
+Status, test coverage and known limits: [docs/STATUS.md](docs/STATUS.md).
 
-## Build the Windows app yourself (needs Node.js LTS)
+## Run from source
 
-Run in `desktop/`:
+Needs [Node.js](https://nodejs.org) 22.12 or later.
 
-    npm install
-    npm install --save-dev electron @electron/packager
-    npx electron-packager . OpenPub --platform=win32 --arch=x64 --asar --out=dist --overwrite
+```
+npm install
+npm start
+```
 
-The app appears in `desktop\dist\OpenPub-win32-x64\OpenPub.exe`.
-These are the commands used to produce the supplied build (run on Linux; not re-run on Windows).
+## Build the Windows app
 
-## Rebuild the bundled HTML after changing `src/`
+```
+npm run package:win
+```
 
-`tools/build.js` expects the original folder layout (`app/src`, `desktop/appsrc`); adjust the paths at the top of the file to `../src` and `../desktop/app`.
+Output: `desktop/dist/OpenPub-win32-x64/OpenPub.exe` and `desktop/dist/OpenPub-<version>-win64.zip`. The app is portable (no installer) and unsigned.
 
-## Third-party pieces
+## Tests
 
-- Electron / Chromium (MIT and others; licence files ship in the app folder)
-- nspell (MIT) and dictionary-en-au (see `desktop/dict/en-AU-LICENSE.txt`)
-- British English hyphenation patterns from the TeX hyphenation collection, via hyphenation.en-gb
-- Ghostscript is NOT included; the app uses a copy installed on the computer if there is one
+```
+npm run test:web        browser build, needs Google Chrome
+npm run test:desktop    desktop app
+npm run test:parser     renders every sample .pub to test-out/parser
+```
+
+On Linux without a display, run the desktop tests under `xvfb-run -a`. Some PDF checks need poppler-utils, Python 3 with pikepdf, and Ghostscript; they are skipped when those are missing.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `app/src` | Editor and `.pub` parser (plain JavaScript, bundled into one HTML file) |
+| `desktop/appsrc` | Electron shell |
+| `desktop/examples` | Sample plug-in and content pack, plug-in documentation |
+| `tools` | Build, packaging and test scripts |
+| `test-data` | Sample `.pub` files |
+| `docs` | Status and third-party notices |
+
+## Optional: CMYK output
+
+Vector CMYK PDF needs [Ghostscript](https://ghostscript.com), which is not included (AGPL licence). OpenPub uses it when it is installed.

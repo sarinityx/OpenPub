@@ -6,7 +6,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 (function () {
   'use strict';
   var A = OP.app, S = A.S, $ = A.$, h = A.h, MM = OP.MM, ui = A.ui;
-  OP.VERSION = '1.1.0';
+  OP.VERSION = '1.1.1';
 
   // ---------------------------------------------------------------- storage (this computer only)
   function idb() {

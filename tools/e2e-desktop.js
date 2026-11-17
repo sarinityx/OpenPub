@@ -1,14 +1,19 @@
 // End-to-end test of the desktop app (Electron) covering the new features.
 const path = require('path'), fs = require('fs'), cp = require('child_process');
-const { _electron } = require('/opt/npm-tools/node_modules/playwright');
-const PUBS = '/home/claude/ref/poi/test-data/publisher', OUT = '/home/claude/e2e-desk';
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+const lib = require('./lib');
+const PUBS = lib.PUBS, OUT = lib.outDir('desktop');
+// Optional inspection tools. Checks that need a missing one are reported as SKIP, not FAIL.
+const POPPLER = lib.have('pdfinfo') && lib.have('pdffonts') && lib.have('pdftotext') && lib.have('pdfimages');
+const PIKEPDF = lib.have('python3') && !/^ERR/.test(lib.sh('python3 -c "import pikepdf"'));
+let skipped = 0;
+function need(avail, what, label, fn) { if (avail) return fn(); console.log('SKIP ' + label + ' (needs ' + what + ')'); skipped++; }
+function isPdf(f) { return fs.existsSync(f) && fs.readFileSync(f).subarray(0, 5).toString('latin1') === '%PDF-'; }
 let failures = 0;
 function ok(c, m) { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) failures++; }
-function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return 'ERR ' + (e.stderr || e.message); } }
+const sh = lib.sh;
 
 (async () => {
-  const app = await _electron.launch({ executablePath: '/home/claude/desktop/node_modules/electron/dist/electron', env: Object.assign({}, process.env, { PATH: '/tmp/gsbin:' + process.env.PATH }), args: ['--no-sandbox', '--user-data-dir=/tmp/openpub-test-' + Date.now(), '/home/claude/desktop/appsrc', path.join(PUBS, 'Sample.pub')] });
+  const app = await lib.launchDesktop([path.join(PUBS, 'Sample.pub')]);
   // native dialogs cannot be clicked from a test: answer them from here
   await app.evaluate(({ dialog }, dir) => {
     global.__next = null;
@@ -183,12 +188,15 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   await page.click('#xGo');
   await page.waitForFunction(() => !document.getElementById('modal').classList.contains('open'), null, { timeout: 120000 });
   const vpdf = path.join(OUT, 'SampleNewsletter.pdf');
+  ok(isPdf(vpdf), 'vector PDF written');
+  need(POPPLER, 'poppler-utils', 'vector PDF pages, fonts and text', () => {
   const info = sh('pdfinfo "' + vpdf + '"'), fonts = sh('pdffonts "' + vpdf + '"'), text = sh('pdftotext -f 1 -l 1 "' + vpdf + '" -');
   ok(/Pages:\s+5/.test(info), 'vector PDF has 5 pages; size ' + (info.match(/Page size:.*/) || [''])[0]);
   ok(/yes\s+yes|TrueType|Type 3|CID/.test(fonts) && fonts.split('\n').length > 3, 'fonts are embedded (' + (fonts.split('\n').length - 3) + ' font entries)');
   ok(/Striving to Achieve/.test(text) && /Freedom/.test(text), 'PDF text is real, selectable text');
   sh('pdftoppm -r 60 -png -f 1 -l 1 "' + vpdf + '" ' + path.join(OUT, 'vpdf'));
   sh('pdftoppm -r 60 -png -f 5 -l 5 "' + vpdf + '" ' + path.join(OUT, 'vpdf'));
+  });
 
   // ---- 11. mail merge on a business card, n-up on A4, vector
   await ev(() => {
@@ -216,10 +224,13 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   await page.click('#shGo');
   await page.waitForFunction(() => !document.getElementById('modal').classList.contains('open'), null, { timeout: 120000 });
   const cards = path.join(OUT, 'Cards-sheet-merged.pdf');
+  ok(isPdf(cards), 'n-up merge PDF written');
+  need(POPPLER, 'poppler-utils', 'n-up merge sheet count and record text', () => {
   const ci = sh('pdfinfo "' + cards + '"'), ct = sh('pdftotext "' + cards + '" -');
   ok(/Pages:\s+2/.test(ci) && /59[45]\.?\d* x 84[12]/.test(ci), 'n-up merge: ' + nupInfo.split('.')[0] + ' -> ' + (ci.match(/Pages:.*/) || [''])[0] + ', ' + (ci.match(/Page size:.*/) || [''])[0]);
   ok(['Alex Tan', 'Brooke, Lee', 'Lee Ng', 'Hobart'].every(s => ct.indexOf(s) >= 0) && ct.indexOf('{{') < 0, 'every record appears on the sheets, no unresolved fields');
   sh('pdftoppm -r 50 -png -f 1 -l 1 "' + cards + '" ' + path.join(OUT, 'cards'));
+  });
 
   // ---- 12. CMYK picture PDF
   await page.keyboard.press('Control+Shift+P');
@@ -227,9 +238,12 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   await ev(() => { OP.app.S.doc.name = 'CardsCMYK'; });
   await page.click('#shGo');
   await page.waitForFunction(() => !document.getElementById('modal').classList.contains('open'), null, { timeout: 120000 });
+  ok(isPdf(path.join(OUT, 'CardsCMYK.pdf')), 'CMYK picture PDF written');
+  need(POPPLER, 'poppler-utils', 'CMYK picture PDF colour space', () => {
   const cm = sh('pdfimages -list "' + path.join(OUT, 'CardsCMYK.pdf') + '"');
   ok(/cmyk/.test(cm), 'CMYK PDF contains a DeviceCMYK image: ' + (cm.split('\n')[2] || '').replace(/\s+/g, ' ').trim());
   sh('pdftoppm -r 80 -png "' + path.join(OUT, 'CardsCMYK.pdf') + '" ' + path.join(OUT, 'cmyk'));
+  });
 
   // ---- 13. booklet
   await openFile(path.join(PUBS, 'SampleNewsletter.pub'));
@@ -239,8 +253,11 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   await page.selectOption('#shLay', 'book');
   await page.click('#shGo');
   await page.waitForFunction(() => !document.getElementById('modal').classList.contains('open'), null, { timeout: 120000 });
+  ok(isPdf(path.join(OUT, 'SampleNewsletter-booklet.pdf')), 'booklet PDF written');
+  need(POPPLER, 'poppler-utils', 'booklet sheet count and size', () => {
   const bk = sh('pdfinfo "' + path.join(OUT, 'SampleNewsletter-booklet.pdf') + '"');
   ok(/Pages:\s+2/.test(bk) && /119[01]\.?\d* x 84[12]/.test(bk), 'booklet: 4 pages on 2 spreads, ' + (bk.match(/Page size:.*/) || [''])[0]);
+  });
   const order = await ev(() => OP.sheetsBooklet(OP.app.S.doc, -1).map(s => s.items.map(i => i.page + 1).join('+')).join(' | '));
   ok(order === '4+1 | 2+3', 'booklet page order: ' + order);
 
@@ -266,6 +283,22 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   const nFonts = await ev(() => document.querySelectorAll('#fontlist option').length);
   ok(nFonts > 25, 'installed fonts loaded automatically: ' + nFonts + ' families in the font list');
 
+  // the font drop-down lists every font, whatever is already in the box
+  await ev((id) => OP.app.setSel([id]), tid);
+  await page.click('#tFont');
+  await page.waitForSelector('.fontpop');
+  const fl = await ev(() => { const o = Array.from(document.querySelectorAll('.fontpop .fontopt')).map(e => e.textContent); return { n: o.length, cur: document.getElementById('tFont').value, nonMatching: o.filter(x => x.toLowerCase().indexOf(document.getElementById('tFont').value.toLowerCase()) < 0).length, on: (document.querySelector('.fontopt.on') || {}).textContent }; });
+  ok(fl.n === nFonts && fl.nonMatching > 20 && fl.on === fl.cur, 'font drop-down shows all ' + fl.n + ' fonts with “' + fl.cur + '” in the box (' + fl.nonMatching + ' of them do not contain that name)');
+  await page.screenshot({ path: path.join(OUT, '08a-fonts.png') });
+  await page.keyboard.type('liberation s');
+  const flt = await ev(() => Array.from(document.querySelectorAll('.fontpop .fontopt')).map(e => e.textContent));
+  ok(flt.length >= 2 && flt.length < 12 && flt.every(x => /liberation s/i.test(x)), 'typing narrows the list: ' + flt.join(', '));
+  await page.locator('.fontpop .fontopt', { hasText: /^Liberation Serif$/ }).click();
+  ok(await ev((id) => OP.app.find(id).text.paras.every(p => p.runs.every(r => r.font === 'Liberation Serif')), tid) && await ev(() => !document.querySelector('.fontpop')), 'picking a font applies it and closes the list');
+  await page.click('#tFont'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  const kb = await ev((id) => OP.app.find(id).text.paras[0].runs[0].font, tid);
+  ok(kb !== 'Liberation Serif' && kb.length > 0, 'keyboard: arrow down + Enter picks the next font (' + kb + ')');
+
   // ---- 15c. text wrap + hyphenation through the UI
   const wr = await ev(() => {
     const A = OP.app; A.addPage();
@@ -289,7 +322,7 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
 
   // ---- 15d. plug-in installed through the dialog
   await tab('plugins'); await page.click('#rbPlugins');
-  await page.locator('.dlg input[type=file][accept^=".js,"]').setInputFiles('/home/claude/desktop/examples/sample-plugin.js');
+  await page.locator('.dlg input[type=file][accept^=".js,"]').setInputFiles(path.join(lib.EXAMPLES, 'sample-plugin.js'));
   await page.waitForFunction(() => { const h = document.querySelector('.dlg header'); return !!h && /Install this plug-in/.test(h.textContent); });
   ok(/program/.test(await page.locator('.dlg .note').innerText()), 'installing a plug-in shows a trust warning first');
   await page.click('.dlg .btn.primary');
@@ -323,7 +356,7 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
 
   // ---- 15e. content pack through the dialog; colour scheme
   await page.click('#rbPlugins');
-  await page.locator('.dlg input[type=file][accept^=".opubpack"]').setInputFiles('/home/claude/desktop/examples/sample-pack.opubpack');
+  await page.locator('.dlg input[type=file][accept^=".opubpack"]').setInputFiles(path.join(lib.EXAMPLES, 'sample-pack.opubpack'));
   await page.waitForFunction(() => { const b = document.querySelector('.dlg .body'); return !!b && document.querySelectorAll('.plug').length > 0 && /Sample pack/.test(b.textContent); });
   ok(true, 'content pack installed from a file');
   const key = await ev(() => Array.from(document.querySelectorAll('#plScheme option')).map(o => o.value + '=' + o.textContent).filter(s => /Sample scheme/.test(s))[0]);
@@ -335,9 +368,10 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   ok(await page.locator('.blk:has-text("Sale tag")').count() === 1, 'pack building blocks appear in the gallery');
   await closeDlg();
 
-  // ---- 15f. vector CMYK through Ghostscript (test stand-in runs the real Ghostscript code)
+  // ---- 15f. vector CMYK through Ghostscript (skipped when no Ghostscript is installed)
   const gst = await ev(() => OP.desktop.gsStatus());
-  ok(gst.found && /^\d+\.\d+/.test(gst.version), 'Ghostscript detected on PATH: version ' + gst.version);
+  await need(gst.found, 'Ghostscript', 'vector CMYK PDF through Ghostscript', async () => {
+  ok(/^\d+\.\d+/.test(gst.version), 'Ghostscript detected: version ' + gst.version);
   await page.keyboard.press('Control+Shift+P');
   await page.selectOption('#shOut', 'vcmyk'); await page.selectOption('#shPages', 'cur');
   await page.waitForFunction(() => /found/.test(document.getElementById('shGsInfo').textContent));
@@ -345,14 +379,21 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   await page.click('#shGo');
   await page.waitForFunction(() => !document.getElementById('modal').classList.contains('open'), null, { timeout: 180000 });
   const vc = path.join(OUT, 'RoundTripSrc-cmyk.pdf');
+  ok(isPdf(vc), 'vector CMYK PDF written');
+  need(PIKEPDF, 'python3 + pikepdf', 'vector CMYK fill operators', () => {
   const py = sh("python3 -c \"import pikepdf,re,sys; pdf=pikepdf.open(sys.argv[1]); pg=pdf.pages[0]; cs=pg.Contents if isinstance(pg.Contents, pikepdf.Array) else [pg.Contents]; d=b' '.join(c.read_bytes() for c in cs); print(len(re.findall(rb'[0-9.]\\s+rg\\s',d)), len(re.findall(rb'[0-9.]\\s+k\\s',d)), len(re.findall(rb'[\\s]0 g\\s',d)))\" '" + vc + "'").trim();
   const [nrg, nk, ng] = py.split(' ').map(Number);
   ok(nrg === 0 && nk > 0 && ng > 0, 'vector CMYK PDF: ' + nrg + ' RGB fills, ' + nk + ' CMYK fills, ' + ng + ' black-plate-only fills');
+  });
+  need(POPPLER, 'poppler-utils', 'CMYK PDF fonts and text', () => {
   ok(/yes\s+yes/.test(sh('pdffonts "' + vc + '"')) && /Organisations|Organ/.test(sh('pdftotext "' + vc + '" -')), 'CMYK PDF keeps embedded fonts and live text');
+  });
+  });
 
   // ---- 15g. the page cannot write to a path the user did not choose
-  const sneaky = await ev(() => OP.desktop.saveFile({ name: 'asked.txt', path: '/tmp/openpub-evil.txt', bytes: new TextEncoder().encode('x') }));
-  ok(!fs.existsSync('/tmp/openpub-evil.txt') && /asked\.txt$/.test(sneaky.path), 'unapproved save path is ignored and goes through the Save dialog: ' + sneaky.path);
+  const evil = lib.tmpPath('openpub-evil.txt'); fs.rmSync(evil, { force: true });
+  const sneaky = await ev((p) => OP.desktop.saveFile({ name: 'asked.txt', path: p, bytes: new TextEncoder().encode('x') }), evil);
+  ok(!fs.existsSync(evil) && /asked\.txt$/.test(sneaky.path), 'unapproved save path is ignored and goes through the Save dialog: ' + sneaky.path);
 
   // ---- 16. save project, reopen, everything persisted
   await ev(() => { OP.app.S.doc.name = 'RoundTrip'; OP.app.gotoPage(0); });
@@ -383,6 +424,6 @@ function sh(cmd) { try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ig
   const res = await Promise.race([closed.then(() => 'closed'), new Promise(r => setTimeout(() => r('timeout'), 8000))]);
   ok(res === 'closed', 'window closes after the unsaved-changes prompt');
   if (res !== 'closed') await app.evaluate(({ app }) => app.exit(0));
-  console.log(failures ? failures + ' FAILED' : 'ALL PASSED');
+  console.log((failures ? failures + ' FAILED' : 'ALL PASSED') + (skipped ? ', ' + skipped + ' group(s) skipped' : ''));
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error('TEST CRASH', e.message.split('\n').slice(0, 12).join('\n')); process.exit(2); });

@@ -1,0 +1,13 @@
+node_modules/
+# build output (regenerate with: npm run build / npm run package:win)
+app/dist/
+desktop/appsrc/app/
+desktop/dist/
+# test output
+test-out/
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.log
+# local Claude Code settings (shared settings in .claude/settings.json are fine to commit)
+.claude/settings.local.json
