@@ -164,6 +164,54 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   }, gid);
   ok(linked.length === 2 && linked.indexOf('grow') < 0, 'a linked text box is not offered "Grow box to fit": ' + linked.join(', '));
 
+  // ---- format painter (Home › Clipboard, Ctrl+Shift+C / Ctrl+Shift+V)
+  await page.click('#rt-home');
+  const fp = await page.evaluate(() => {
+    const A = OP.app, pg = A.page();
+    const src = OP.newTextBox(60, 560, 150, 40, [OP.newPara([OP.newRun('Source', { size: 20, font: 'Georgia', b: true, color: '#aa0000' })], { align: 'center', after: 6 })]);
+    Object.assign(src, { fill: { type: 'solid', color: '#ddeeff' }, stroke: { color: '#003366', width: 2, dash: 'solid' }, opacity: 0.8, shadow: { dx: 3, dy: 3, blur: 4, color: '#555555' } });
+    const dst = OP.newTextBox(250, 560, 150, 40, [OP.newPara([OP.newRun('Target', { size: 12, font: 'Arial' })])]);
+    const s1 = OP.newShape('roundrect', 60, 680, 80, 50); Object.assign(s1, { fill: { type: 'solid', color: '#ff8800' }, stroke: { color: '#222222', width: 3, dash: 'solid' }, radius: 12, shadow: { dx: 2, dy: 2, blur: 3, color: '#333333' } });
+    const s2 = OP.newShape('roundrect', 200, 680, 80, 50); s2.radius = 2;
+    const s3 = OP.newShape('rect', 340, 680, 80, 50);
+    [src, dst, s1, s2, s3].forEach(x => pg.items.push(x)); A.commit(); A.setSel([src.id]);
+    return { src: src.id, dst: dst.id, s1: s1.id, s2: s2.id, s3: s3.id };
+  });
+  const centre = (id) => page.evaluate((id) => { const A = OP.app, it = A.find(id), c = A.toScreen(it.x + it.w / 2, it.y + it.h / 2), r = document.getElementById('ov').getBoundingClientRect(); return { x: r.left + c.x, y: r.top + c.y }; }, id);
+  const look = (id) => page.evaluate((id) => { const it = OP.app.find(id), p = it.text && it.text.paras[0], r = p && p.runs[0];
+    return { fill: it.fill, stroke: it.stroke, opacity: it.opacity, shadow: it.shadow, radius: it.radius, run: r && { font: r.font, size: r.size, b: !!r.b, color: r.color }, para: p && { align: p.align, after: p.after } }; }, id);
+  await page.click('#rbPainter');
+  ok(await page.evaluate(() => !!OP.app.S.painter && document.getElementById('rbPainter').classList.contains('on')), 'Format painter button arms the painter');
+  const pd = await centre(fp.dst); await page.mouse.click(pd.x, pd.y);
+  const [ls, ld] = [await look(fp.src), await look(fp.dst)];
+  ok(JSON.stringify(ld.run) === JSON.stringify(ls.run) && JSON.stringify(ld.para) === JSON.stringify(ls.para), 'text box to text box: character and paragraph formatting copied (' + ld.run.font + ' ' + ld.run.size + ' pt bold ' + ld.run.color + ', ' + ld.para.align + ')');
+  ok(JSON.stringify([ld.fill, ld.stroke, ld.opacity, ld.shadow]) === JSON.stringify([ls.fill, ls.stroke, ls.opacity, ls.shadow]), 'text box to text box: fill, outline, opacity and shadow copied');
+  ok(await page.evaluate(() => !OP.app.S.painter), 'one click applies once, then the painter switches off');
+  ok(await page.evaluate((id) => OP.plainText(OP.app.find(id).text) === 'Target', fp.dst), 'the target keeps its own text');
+  await page.click('#tbUndo');
+  const lu = await look(fp.dst);
+  ok(lu.run.font === 'Arial' && lu.run.size === 12 && !lu.run.b && !lu.fill && lu.para.align === 'left', 'one undo reverts one application');
+  await page.click('#tbRedo');
+  await page.evaluate((id) => OP.app.setSel([id]), fp.s1);
+  await page.keyboard.press('Control+Shift+C');
+  await page.evaluate((id) => OP.app.setSel([id]), fp.s2);
+  await page.keyboard.press('Control+Shift+V');
+  const [l1, l2] = [await look(fp.s1), await look(fp.s2)];
+  ok(JSON.stringify([l2.fill, l2.stroke, l2.radius, l2.shadow]) === JSON.stringify([l1.fill, l1.stroke, l1.radius, l1.shadow]), 'shape to shape with Ctrl+Shift+C and Ctrl+Shift+V: fill, outline, corner rounding and shadow copied');
+  await page.evaluate((id) => OP.app.setSel([id]), fp.s1);
+  await page.dblclick('#rbPainter');
+  const p3 = await centre(fp.s3), p2 = await centre(fp.dst);
+  await page.mouse.click(p3.x, p3.y);
+  const stillOn = await page.evaluate(() => !!(OP.app.S.painter && OP.app.S.painter.sticky));
+  await page.mouse.click(p2.x, p2.y);
+  const [l3, l2b] = [await look(fp.s3), await look(fp.dst)];
+  const beforeEsc = await page.evaluate(() => [JSON.stringify(OP.app.S.doc), OP.app.S.undo.length]);
+  await page.keyboard.press('Escape');
+  const afterEsc = await page.evaluate(() => [JSON.stringify(OP.app.S.doc), OP.app.S.undo.length, !!OP.app.S.painter]);
+  ok(stillOn && l3.fill.color === '#ff8800' && l2b.fill.color === '#ff8800', 'double-click keeps the painter on across clicks');
+  ok(!afterEsc[2] && afterEsc[0] === beforeEsc[0] && afterEsc[1] === beforeEsc[1], 'Esc switches the painter off with no change');
+  await page.evaluate((ids) => { const A = OP.app; A.page().items = A.page().items.filter(i => ids.indexOf(i.id) < 0); A.setSel([]); A.commit(); A.refreshAll(); }, Object.values(fp));
+
   // ---- add shape + text box with tools
   await page.keyboard.press('Escape');
   await page.keyboard.press('r');
