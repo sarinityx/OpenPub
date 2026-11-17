@@ -282,6 +282,15 @@ const sh = lib.sh;
   // ---- 15b. installed fonts are loaded without asking
   const nFonts = await ev(() => document.querySelectorAll('#fontlist option').length);
   ok(nFonts > 25, 'installed fonts loaded automatically: ' + nFonts + ' families in the font list');
+  // the design check knows which fonts are installed (desktop only)
+  const deskFont = await ev(() => {
+    const A = OP.app, it = OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('Hello', { size: 12, font: 'Nowhere Sans' })])]);
+    A.page().items.push(it); A.commit();
+    const rs = A.checkDesign().filter(r => r.id === it.id && r.kind === 'font');
+    A.page().items = A.page().items.filter(i => i !== it); A.commit(); A.showTab('props');
+    return rs.map(r => r.text);
+  });
+  ok(deskFont.length === 1 && /Nowhere Sans/.test(deskFont[0]), 'design check reports a font that is not installed: ' + deskFont[0]);
 
   // the font drop-down lists every font, whatever is already in the box
   await ev((id) => OP.app.setSel([id]), tid);

@@ -361,6 +361,54 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.waitForFunction(() => OP.app.S.doc.name === 'Newsletter, two pages' || OP.app.S.doc.pages.length === 2);
   ok(await page.evaluate(() => { const d = OP.app.S.doc, a = d.pages[0].items.find(i => i.next); const s = OP.storyOf(d, a); return d.pages.length === 2 && s && s.chain.length === 3 && OP.textCols(d, s.chain[2], null).cols.length === 2; }), 'newsletter template: story linked through 3 boxes over 2 pages, last box in 2 columns');
 
+  // ---- design checker (Review › Check design)
+  const seeded = await page.evaluate(() => {
+    const A = OP.app, d = OP.newDoc(), pg = d.pages[0], st = { size: 12, font: 'Arial' };
+    const c = document.createElement('canvas'); c.width = 100; c.height = 100; c.getContext('2d').fillRect(10, 10, 50, 50);
+    const over = OP.newTextBox(40, 40, 100, 20, [OP.newPara([OP.newRun('This sentence is much too long to fit in such a small text box at twelve points.', st)])]);
+    const pic = OP.newImage ? OP.newImage(OP.addAsset(d, c.toDataURL('image/png'), { w: 100, h: 100 }), 40, 120, 200, 200) : null;
+    const off = OP.newShape('rect', d.w - 40, 400, 80, 40);
+    const empty = OP.newTextBox(40, 500, 150, 30, [OP.newPara([OP.newRun('', st)])]);
+    const field = OP.newTextBox(40, 560, 200, 30, [OP.newPara([OP.newRun('Dear {{Name}}', st)])]);
+    const fine = OP.newTextBox(300, 40, 200, 40, [OP.newPara([OP.newRun('Fits easily', st)])]);
+    [over, pic, off, empty, field, fine].forEach(x => pg.items.push(x));
+    A.loadDoc(d);
+    return { over: over.id, pic: pic && pic.id, off: off.id, empty: empty.id, field: field.id, fine: fine.id };
+  });
+  await page.click('#rt-review'); await page.click('#rbCheck');
+  const found = await page.evaluate(() => Array.from(document.querySelectorAll('#check .ckres')).map(b => [b.dataset.kind, b.dataset.id]));
+  const kinds = found.map(f => f[0]).sort().join(',');
+  ok(seeded.pic && kinds === 'empty,field,lowres,offpage,overflow', 'seeded document reports exactly its five problems: ' + kinds);
+  ok(found.every(f => f[1] !== seeded.fine), 'the text box that fits is not reported');
+  let clicked = 0;
+  for (let i = 0; i < found.length; i++) {
+    await page.locator('#check .ckres').nth(i).click();
+    if (await page.evaluate((id) => OP.app.S.sel.length === 1 && OP.app.S.sel[0] === id, found[i][1])) clicked++;
+  }
+  ok(clicked === found.length, 'clicking each result selects its object (' + clicked + ' of ' + found.length + ')');
+  await page.check('#ckCmyk');
+  const withCmyk = await page.evaluate(() => [Array.from(document.querySelectorAll('#check .ckres.info')).map(b => b.dataset.kind).join(','), document.getElementById('ckSum').textContent]);
+  ok(withCmyk[0] === 'rgb' && /5 problems, 1 note/.test(withCmyk[1]), 'CMYK output lists the RGB picture as a note: ' + withCmyk[1]);
+  await page.uncheck('#ckCmyk');
+  const fontRes = await page.evaluate(() => {
+    const d = OP.newDoc(); d.pages[0].items.push(OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('Hello', { size: 12, font: 'Nowhere Sans' })])]));
+    return OP.checkDesign(d, { fonts: ['Arial', 'Georgia'] }).map(r => r.kind + ': ' + r.text);
+  });
+  ok(fontRes.length === 1 && /^font: .*Nowhere Sans/.test(fontRes[0]), 'a font that is not installed is reported: ' + fontRes[0]);
+  await page.evaluate((id) => { const A = OP.app; A.find(id).x += 1; A.commit(); }, seeded.fine);
+  await page.evaluate(() => OP.app.dlgExport());
+  const offered = await page.evaluate(() => !!document.getElementById('ckOffer') && document.getElementById('modal').classList.contains('open'));
+  await page.evaluate(() => OP.app.closeModal(true));
+  await page.click('#ckRun');
+  await page.evaluate(() => OP.app.dlgExport());
+  const notOffered = await page.evaluate(() => !document.getElementById('ckOffer'));
+  await page.evaluate(() => OP.app.closeModal(true));
+  ok(offered && notOffered, 'Export offers the check when the document changed since it ran, and not right after a check');
+  await page.evaluate(() => { const A = OP.app, d = OP.newDoc(); d.pages[0].items.push(OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('All good', { size: 12, font: 'Arial' })])])); A.loadDoc(d); A.checkDesign(); });
+  const clean = await page.evaluate(() => [document.querySelectorAll('#check .ckres').length, document.getElementById('ckSum').textContent]);
+  ok(clean[0] === 0 && clean[1] === 'No problems found.', 'a clean document reports none: ' + clean[1]);
+  await page.evaluate(() => { OP.app.showTab('props'); OP.app.S.dirty = false; });
+
   // ---- a bad file gives a readable error, not a crash
   await page.evaluate(() => { OP.app.S.dirty = false; });
   const [c4] = await Promise.all([page.waitForEvent('filechooser'), page.click('#btnOpen')]);
