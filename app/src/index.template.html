@@ -131,6 +131,9 @@ kbd { font: 11px var(--font-mono); color: var(--ink-2); }
 #rulerV { position: absolute; left: 0; top: 20px; width: 20px; }
 #rulerC { position: absolute; left: 0; top: 0; width: 20px; height: 20px; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font: 9px/20px var(--font-mono); text-align: center; color: var(--ink-2); }
 #edwrap { position: absolute; left: 20px; top: 20px; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
+/* text wrap while typing: the canvas draws the text, caret and selection; the editor only holds them */
+#ted.wrapedit, #ted.wrapedit *, #ted.wrapedit *::before { color: transparent !important; text-decoration-color: transparent !important; caret-color: transparent !important; }
+#ted.wrapedit ::selection { background: transparent; }
 #ted { position: absolute; left: 0; top: 0; transform-origin: 0 0; outline: none; pointer-events: auto; display: flex; flex-direction: column; overflow: visible; white-space: pre-wrap; overflow-wrap: break-word; cursor: text; box-shadow: 0 0 0 1px var(--sel); caret-color: #000; color: #000; font-kerning: normal; }
 #ted > div { min-height: 1em; }
 #ted > div.bul::before { content: "\2022\00a0\00a0"; }

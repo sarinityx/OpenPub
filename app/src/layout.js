@@ -168,7 +168,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
             }
           }
         }
-        var segs = [], x = x0;
+        var segs = [], marks = [], x = x0;
         for (k = 0; k < tk.length; k++) {
           var t = tk[k], w = t.w + ((t.type === 'space' && k < end) ? gap : 0);
           if (t.type === 'word' && track) w += track * charCount(t.text);
@@ -176,13 +176,15 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
             segs.push({ x: x, w: t.type === 'bullet' ? t.w : w, text: t.type === 'space' ? '' : t.text, run: t.run, css: t.css, space: t.type === 'space',
               sp: ((t.run.sp || 0) * scale) + (t.type === 'word' ? track : 0) });
           }
+          // where each piece of the paragraph's text sits on the line (the editor's caret and clicks use it)
+          if (t.ri >= 0) marks.push({ ri: t.ri, s: t.s, e: t.e, x: x, w: w, type: t.type, text: t.text, css: t.css, sp: ((t.run.sp || 0) * scale) + (t.type === 'word' ? track : 0) });
           x += w;
         }
         var firstTok = null;
         for (k = 0; k < tk.length; k++) if (tk[k].ri >= 0) { firstTok = tk[k]; break; }
         lines.push({
           y: y, h: lh, base: y + (lh - natural) / 2 + asc, segs: segs, pi: pi, li: li,
-          ri: firstTok ? firstTok.ri : (li === 0 ? 0 : -1), ci: firstTok ? firstTok.s : 0, width: textW, x: x0
+          ri: firstTok ? firstTok.ri : (li === 0 ? 0 : -1), ci: firstTok ? firstTok.s : 0, width: textW, x: x0, marks: marks
         });
         advance(lh);
         hyRun = (end > 0 && tk[end - 1].hy) ? hyRun + 1 : 0;

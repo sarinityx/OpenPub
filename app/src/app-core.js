@@ -213,7 +213,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     ctx.save();
     ctx.translate(v.ox, v.oy);
     ctx.scale(v.zoom, v.zoom);
-    OP.renderPage(ctx, d, page, { bleed: b, pxPerPt: v.zoom * dpr, skipTextOf: S.editCell ? null : S.editing, skipCell: S.editCell });
+    // the edited box's text is hidden under the editor, except in a box with text wrap, where the canvas shows it live
+    var showEdited = S.editCell || (A.isWrapEditing && A.isWrapEditing());
+    OP.renderPage(ctx, d, page, { bleed: b, pxPerPt: v.zoom * dpr, skipTextOf: showEdited ? null : S.editing, skipCell: S.editCell });
     ctx.restore();
     // Objects hanging off the page stay visible on the pasteboard, but dimmed.
     var x0 = v.ox - b * v.zoom, y0 = v.oy - b * v.zoom, w = (d.w + 2 * b) * v.zoom, h = (d.h + 2 * b) * v.zoom;
@@ -422,6 +424,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       else { var gy = px(A.toScreen(0, g.pos).y); ctx.moveTo(0, gy); ctx.lineTo(S.cw, gy); }
       ctx.stroke();
     }
+    if (A.drawEditOverlay) A.drawEditOverlay(ctx); // caret and selection drawn by OpenPub (text wrap while typing)
   }
 
   // ---------------------------------------------------------------- status + toasts
