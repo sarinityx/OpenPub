@@ -39,10 +39,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      # The tests call python3 by name; python.org builds only ship python.exe.
+      # The tests call python3 by name; add it if this Python build does not have one.
       - name: Add python3 and install pikepdf
         run: |
-          Copy-Item (Join-Path $env:pythonLocation 'python.exe') (Join-Path $env:pythonLocation 'python3.exe')
+          $py3 = Join-Path $env:pythonLocation 'python3.exe'
+          if (-not (Test-Path $py3)) { Copy-Item (Join-Path $env:pythonLocation 'python.exe') $py3 }
           python3 -m pip install pikepdf
           python3 -c "import pikepdf; print('pikepdf', pikepdf.__version__)"
 
