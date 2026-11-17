@@ -476,6 +476,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     });
     return out;
   }
+  /** The units align and distribute would move: unlocked selected objects, a group counting as one. */
+  A.alignUnits = function () { return units(); };
   A.align = function (how) {
     var us = units();
     if (!us.length) return;

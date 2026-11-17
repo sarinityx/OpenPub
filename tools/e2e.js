@@ -5,6 +5,7 @@ const APP = lib.fileUrl(lib.WEB_APP);
 const PUBS = lib.PUBS;
 const OUT = lib.outDir('web');
 let failures = 0;
+function round2(n) { return Math.round(n * 100) / 100; }
 function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) failures++; }
 
 (async () => {
@@ -171,6 +172,35 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.keyboard.press('Control+F1');
   await page.click('#rt-home');
   await page.screenshot({ path: path.join(OUT, '11-light.png') });
+
+  // ---- align and distribute from the ribbon (Home › Align)
+  const ALIGN = ['rbAlL', 'rbAlC', 'rbAlR', 'rbAlT', 'rbAlM', 'rbAlB'], DIST = ['rbDistH', 'rbDistV'];
+  const disabled = (ids) => page.evaluate((ids) => ids.map(id => document.getElementById(id).disabled), ids);
+  const ids3 = await page.evaluate(() => {
+    const A = OP.app; A.addPage();
+    const s = [OP.newShape('rect', 50, 60, 40, 30), OP.newShape('rect', 200, 100, 60, 20), OP.newShape('rect', 120, 300, 30, 50)];
+    s.forEach(x => A.page().items.push(x)); A.commit(); A.setSel([]);
+    return s.map(x => x.id);
+  });
+  const none = await disabled(ALIGN.concat(DIST));
+  ok(none.every(Boolean), 'ribbon align and distribute are disabled with nothing selected');
+  await page.evaluate((id) => OP.app.setSel([id]), ids3[0]);
+  const one = await disabled(ALIGN.concat(DIST));
+  ok(one.slice(0, 6).every(d => !d) && one.slice(6).every(Boolean), 'one object: align enabled, distribute disabled');
+  await page.click('#rbAlL'); await page.click('#rbAlB');
+  const a1 = await page.evaluate((id) => { const it = OP.app.find(id), d = OP.app.S.doc; return { x: it.x, bottom: it.y + it.h, h: d.h }; }, ids3[0]);
+  ok(Math.abs(a1.x) < 0.01 && Math.abs(a1.bottom - a1.h) < 0.01, 'one object aligns to the page: left ' + round2(a1.x) + ', bottom ' + round2(a1.bottom) + ' of ' + round2(a1.h) + ' pt');
+  await page.evaluate((ids) => OP.app.setSel(ids), ids3);
+  ok((await disabled(DIST)).every(d => !d), 'three objects: distribute enabled');
+  await page.click('#rbAlT');
+  const tops = await page.evaluate((ids) => ids.map(id => OP.app.find(id).y), ids3);
+  ok(tops.every(y => Math.abs(y - 100) < 0.01), 'align top lines up three objects at the highest top: ' + tops.map(round2).join(', '));
+  await page.click('#rbDistH');
+  const gaps = await page.evaluate((ids) => { const s = ids.map(id => OP.app.find(id)).sort((a, b) => a.x - b.x); return [s[1].x - (s[0].x + s[0].w), s[2].x - (s[1].x + s[1].w)]; }, ids3);
+  ok(Math.abs(gaps[0] - gaps[1]) < 0.01 && gaps[0] > 0, 'space evenly across gives equal gaps: ' + gaps.map(round2).join(' and ') + ' pt');
+  await page.click('#tbUndo');
+  const undone = await page.evaluate((ids) => ids.map(id => OP.app.find(id).x), ids3);
+  ok(undone[0] === 0 && undone[1] === 200 && undone[2] === 120, 'one undo reverts the spacing: x = ' + undone.map(round2).join(', '));
   // content pack + templates work in the browser build too
   const packInfo = await page.evaluate((txt) => { const p = OP.app.installPackText(txt); return p.templates.length + '/' + p.blocks.length + '/' + p.colours.length; }, fs.readFileSync(path.join(__dirname, '..', 'desktop', 'examples', 'sample-pack.opubpack'), 'utf8'));
   ok(packInfo === '1/2/1', 'content pack installs: templates/blocks/colours = ' + packInfo);
