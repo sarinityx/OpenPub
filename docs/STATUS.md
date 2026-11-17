@@ -32,6 +32,7 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 - Packaged (asar) build smoke-tested on Linux and on Windows (`npm run package:win` run on Windows, including the zip): file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests.
 - CMYK conversion tested with Ghostscript 9.56 code (a WASM build standing in for a system install) and a FOGRA39 profile, and with Ghostscript 10.08 installed on Windows.
 - `npm start` runs the app from source on Windows.
+- CI (`.github/workflows/windows.yml`): web, desktop and parser tests on `windows-latest` for every push to `main` and every pull request, with no desktop checks allowed to skip.
 
 ## Not tested
 
@@ -52,4 +53,5 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 - Catalogue merge, design checker, spot colours.
 - Wrap on both sides of an obstacle; live wrap while typing.
 - Per-cell table borders on import; true bent WordArt glyphs.
-- CI: run the web and desktop tests on `windows-latest` (the PDF checks need poppler, pikepdf and Ghostscript installed in the workflow, or they skip).
+- CI: add packaging (`npm run package:win`) and the packaged smoke test to the Windows workflow; consider a Linux job.
+- Font drop-down tests: pick from whatever fonts are installed instead of needing Liberation Serif.

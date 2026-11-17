@@ -1,0 +1,112 @@
+name: Windows tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # make the desktop tests fail, not skip, if an inspection tool is missing
+      OPENPUB_REQUIRE_ALL: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22' # the minimum in package.json engines
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/appsrc/package-lock.json
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      # The tests call python3 by name; add it if this Python build does not have one.
+      - name: Add python3 and install pikepdf
+        run: |
+          $py3 = Join-Path $env:pythonLocation 'python3.exe'
+          if (-not (Test-Path $py3)) { Copy-Item (Join-Path $env:pythonLocation 'python.exe') $py3 }
+          python3 -m pip install pikepdf
+          python3 -c "import pikepdf; print('pikepdf', pikepdf.__version__)"
+
+      - name: Install poppler 25.07
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'poppler.zip'
+          Invoke-WebRequest 'https://github.com/oschwartz10612/poppler-windows/releases/download/v25.07.0-0/Release-25.07.0-0.zip' -OutFile $zip
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'poppler')
+          $bin = Join-Path $env:RUNNER_TEMP 'poppler\poppler-25.07.0\Library\bin'
+          Add-Content $env:GITHUB_PATH $bin
+          & (Join-Path $bin 'pdfinfo.exe') -v
+
+      # Ghostscript is AGPL: installed here for the tests, never bundled with the app.
+      # The official installer hangs on the runner even with /S, so unpack it with 7-Zip
+      # into the folder the installer would use (the app looks in Program Files\gs).
+      - name: Install Ghostscript 10.08
+        timeout-minutes: 5
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'gs10080w64.exe'
+          Invoke-WebRequest 'https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe' -OutFile $exe
+          "downloaded: $((Get-Item $exe).Length) bytes"
+          $sig = Get-AuthenticodeSignature $exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Artifex Software') { throw "Unexpected signature: $($sig.Status) $($sig.SignerCertificate.Subject)" }
+          "signature: $($sig.Status), $($sig.SignerCertificate.Subject)"
+          $dest = 'C:\Program Files\gs\gs10.08.0'
+          7z x $exe "-o$dest" -y -bso0 -bsp0
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit code $LASTEXITCODE" }
+          $gs = Join-Path $dest 'bin\gswin64c.exe'
+          if (-not (Test-Path $gs)) { Get-ChildItem $dest | Format-Table Name; throw 'gswin64c.exe not found after unpacking' }
+          & $gs --version
+
+      # The font drop-down checks type "liberation s" and pick Liberation Serif.
+      - name: Install Liberation fonts 2.1.5
+        run: |
+          $tgz = Join-Path $env:RUNNER_TEMP 'liberation.tar.gz'
+          Invoke-WebRequest 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz' -OutFile $tgz
+          $dir = Join-Path $env:RUNNER_TEMP 'liberation'
+          New-Item -ItemType Directory $dir | Out-Null
+          tar -xzf $tgz -C $dir
+          $reg = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+          Get-ChildItem $dir -Recurse -Filter *.ttf | ForEach-Object {
+            Copy-Item $_.FullName 'C:\Windows\Fonts\' -Force
+            New-ItemProperty -Path $reg -Name ($_.BaseName + ' (TrueType)') -Value $_.Name -PropertyType String -Force | Out-Null
+          }
+          (Get-ChildItem 'C:\Windows\Fonts\Liberation*.ttf').Count
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Browser tests
+        run: npm run test:web
+
+      - name: Desktop tests
+        run: npm run test:desktop
+
+      - name: Parser run over the sample files
+        run: npm run test:parser
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-out
+          path: test-out/
+          retention-days: 7
+          if-no-files-found: ignore
