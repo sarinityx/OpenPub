@@ -416,9 +416,26 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         }))
       ]),
       h('div', { class: 'pair' }, [
-        num('tLs', st.ls || 1, { pre: 'Line', unit: '×', min: 0.5, max: 5, step: 0.05, dec: 2, aria: 'Line spacing' }, function (v, f) { A.applyParaStyle({ ls: v }, f); }),
+        num('tBefore', st.before || 0, { pre: 'Before', unit: 'pt', min: 0, max: 500, step: 1, dec: 1, aria: 'Space before paragraph' }, function (v, f) { A.applyParaStyle({ before: v }, f); }),
         num('tAfter', st.after || 0, { pre: 'After', unit: 'pt', min: 0, max: 500, step: 1, dec: 1, aria: 'Space after paragraph' }, function (v, f) { A.applyParaStyle({ after: v }, f); })
-      ])
+      ]),
+      row('Lines', [
+        select('tLsMode', st.lsPt ? 'exact' : 'mult', [['mult', 'Multiple'], ['exact', 'Exactly']], function (v) {
+          if (v === 'exact') A.applyParaStyle({ lsPt: OP.round((st.size || 12) * 1.2 * (st.ls || 1), 1) });
+          else A.applyParaStyle({ ls: 1 });
+          A.refreshTextControls(true);
+        }, 'Line spacing type'),
+        st.lsPt ? num('tLsPt', st.lsPt, { unit: 'pt', min: 1, max: 1000, step: 0.5, dec: 1, aria: 'Line spacing in points' }, function (v, f) { A.applyParaStyle({ lsPt: v }, f); })
+          : num('tLs', st.ls || 1, { unit: '×', min: 0.5, max: 5, step: 0.05, dec: 2, aria: 'Line spacing' }, function (v, f) { A.applyParaStyle({ ls: v }, f); })
+      ], 'tLsMode'),
+      h('h3', { text: 'Indents' }),
+      h('div', { class: 'pair' }, [
+        num('tIndL', (st.left || 0) / MM, { pre: 'Left', unit: 'mm', min: 0, max: 500, step: 1, dec: 1, aria: 'Left indent' }, function (v, f) { A.applyParaStyle({ left: v * MM }, f); }),
+        num('tIndR', (st.right || 0) / MM, { pre: 'Right', unit: 'mm', min: 0, max: 500, step: 1, dec: 1, aria: 'Right indent' }, function (v, f) { A.applyParaStyle({ right: v * MM }, f); })
+      ]),
+      row('First line', [
+        num('tIndF', (st.indent || 0) / MM, { unit: 'mm', min: -500, max: 500, step: 1, dec: 1, aria: 'First-line indent (negative for a hanging indent)' }, function (v, f) { A.applyParaStyle({ indent: v * MM }, f); })
+      ], 'tIndF')
     ];
     if (tx) {
       rows.push(row('Inset', [num('tPad', tx.pad[0], { unit: 'pt', min: 0, max: 500, step: 1, dec: 1, aria: 'Text inset' }, function (v, f) {
@@ -445,12 +462,17 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var set = function (id, on) { var el = $(id); if (el) el.classList.toggle('on', !!on); };
     set('tB', st.b); set('tI', st.i); set('tU', st.u); set('tBul', st.bullet); set('tNum', st.num); set('tS', st.s); set('tCaps', st.caps);
     ['left', 'center', 'right', 'justify'].forEach(function (a, i) { set('tA' + i, st.align === a); });
-    var f = $('tFont'), sz = $('tSize'), c = $('tCol'), ls = $('tLs'), af = $('tAfter');
+    // the caret moved between "multiple" and "exactly" paragraphs: the line field itself changes
+    var mode = $('tLsMode');
+    if (mode && mode.value !== (st.lsPt ? 'exact' : 'mult')) { A.refreshPanels(); return; }
+    var f = $('tFont'), sz = $('tSize'), c = $('tCol');
     if (f && document.activeElement !== f) f.value = st.font;
     if (sz && document.activeElement !== sz) sz.value = st.size;
     if (c && document.activeElement !== c) c.value = st.color;
-    if (ls && document.activeElement !== ls) ls.value = OP.round(st.ls || 1, 2);
-    if (af && document.activeElement !== af) af.value = st.after || 0;
+    var put = function (id, v, dec) { var el = $(id); if (el && document.activeElement !== el) el.value = OP.round(v, dec); };
+    put('tLs', st.ls || 1, 2); put('tLsPt', st.lsPt || 0, 1);
+    put('tBefore', st.before || 0, 1); put('tAfter', st.after || 0, 1);
+    put('tIndL', (st.left || 0) / MM, 1); put('tIndR', (st.right || 0) / MM, 1); put('tIndF', (st.indent || 0) / MM, 1);
   };
 
   A.pickReplace = function (it) {
