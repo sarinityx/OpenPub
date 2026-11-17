@@ -75,6 +75,17 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   function fileOpen() { $('fileOpen').click(); }
   function toggle(prop, redraw) { return function () { S[prop] = !S[prop]; A.refreshToolbar(); if (redraw) A.invalidateOverlay(); }; }
   function zoomBy(f) { return function () { A.setZoom(S.view.zoom * f); A.zoomLabel(); }; }
+  function alignBtn(id, icon, label, how, tip) { return { id: id, icon: icon, label: label, aria: 'Align ' + label.toLowerCase(), tip: tip, fn: function () { A.align(how); } }; }
+
+  // Align buttons need something to move; distribute needs three or more (a group counts as one).
+  var ALIGN_IDS = ['rbAlL', 'rbAlC', 'rbAlR', 'rbAlT', 'rbAlM', 'rbAlB'], DIST_IDS = ['rbDistH', 'rbDistV'];
+  function refreshAlign() {
+    var n = S.doc && A.alignUnits ? A.alignUnits().length : 0;
+    ALIGN_IDS.forEach(function (id) { var el = $(id); if (el) el.disabled = n < 1; });
+    DIST_IDS.forEach(function (id) { var el = $(id); if (el) el.disabled = n < 3; });
+  }
+  var basePanels = A.refreshPanels;
+  A.refreshPanels = function () { basePanels.apply(this, arguments); refreshAlign(); };
 
   function tabs() {
     var desk = !!OP.desktop;
@@ -119,6 +130,15 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           [{ id: 'rbLock', icon: 'lock', label: 'Lock or unlock', fn: function () { A.toggleLock(); } },
             { id: 'rbCh', icon: 'rCentreH', label: 'Centre across page', fn: function () { A.centreOnPage('c'); } },
             { id: 'rbCv', icon: 'rCentreV', label: 'Centre down page', fn: function () { A.centreOnPage('m'); } }]] },
+        { title: 'Align', items: [
+          [alignBtn('rbAlL', 'alL', 'Left', 'l', 'Align left: line up left edges. With one object, move it to the left of the page'),
+            alignBtn('rbAlC', 'alC', 'Centre', 'c', 'Align centre: line up centres across. With one object, centre it across the page'),
+            alignBtn('rbAlR', 'alR', 'Right', 'r', 'Align right: line up right edges. With one object, move it to the right of the page')],
+          [alignBtn('rbAlT', 'alT', 'Top', 't', 'Align top: line up top edges. With one object, move it to the top of the page'),
+            alignBtn('rbAlM', 'alM', 'Middle', 'm', 'Align middle: line up middles down. With one object, centre it down the page'),
+            alignBtn('rbAlB', 'alB', 'Bottom', 'b', 'Align bottom: line up bottom edges. With one object, move it to the bottom of the page')],
+          [{ id: 'rbDistH', icon: 'distH', label: 'Space across', aria: 'Space evenly across', tip: 'Space evenly across: even gaps from left to right (three or more objects)', fn: function () { A.distribute('h'); } },
+            { id: 'rbDistV', icon: 'distV', label: 'Space down', aria: 'Space evenly down', tip: 'Space evenly down: even gaps from top to bottom (three or more objects)', fn: function () { A.distribute('v'); } }]] },
         { title: 'Editing', items: [[
           { id: 'rbFind', icon: 'rFind', label: 'Find and replace', tip: 'Ctrl+F', fn: function () { A.dlgFind(); } },
           { id: 'rbSelAll', icon: 'rSelAll', label: 'Select all', tip: 'Ctrl+A', fn: function () { A.selectAll(); } },
@@ -178,7 +198,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   // ---------------------------------------------------------------- building
   var active = readPref('openpub.ribbonTab', 'home');
   function button(d) {
-    var b = h('button', { type: 'button', class: 'rb-btn' + (d.lg ? ' lg' : ''), id: d.id, title: d.tip || d.label, 'aria-label': d.label,
+    var b = h('button', { type: 'button', class: 'rb-btn' + (d.lg ? ' lg' : ''), id: d.id, title: d.tip || d.label, 'aria-label': d.aria || d.label,
       html: A.icon(d.icon) + '<span class="lbl">' + OP.escXml(d.label) + '</span>', onclick: function (e) { A.closeMenus(); d.fn(e); } });
     return b;
   }
@@ -216,6 +236,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       body.appendChild(h('div', { class: 'rb-group', role: 'group', 'aria-label': g.title }, [h('div', { class: 'rb-items' }, kids), h('div', { class: 'rb-title', text: g.title })]));
     });
     A.refreshToolbar();
+    refreshAlign();
   }
   /** Show a ribbon tab by id ('file', 'home', 'insert', 'design', 'mail', 'review', 'view', 'plugins'). */
   A.ribbonTab = function (id) {
