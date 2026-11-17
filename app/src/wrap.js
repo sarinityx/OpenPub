@@ -1,12 +1,27 @@
 /* OpenPub – text wrap. An item with wrap = {mode:'square'|'tight', dist} pushes the text of
- * overlapping text boxes on the same page aside. Each obstacle is reduced to a left/right extent per
- * row of the text box, so wrapping follows rotated shapes, ovals and transparent pictures alike.
- * Text takes the wider side of an obstacle; it is not split across both sides. */
+ * overlapping text boxes on the same page aside; so do such items on the page's master page.
+ * Each obstacle is reduced to a left/right extent per row of the text box, so wrapping follows
+ * rotated shapes, ovals and transparent pictures alike. Text flows on both sides of an obstacle:
+ * each line fills the free space left of it, then the space right of it. A side narrower than
+ * OP.WRAP_MIN_SIDE is skipped. */
 var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP = {});
 
 (function () {
   'use strict';
   var cache = {}, cacheN = 0;
+  /** Narrowest free space beside an obstacle that text is put into, in points (36 pt ≈ 12.7 mm,
+   *  room for a short word or two at body sizes). Narrower gaps stay empty. */
+  OP.WRAP_MIN_SIDE = 36;
+
+  /** Items on a page's master page that text on the page wraps around. */
+  function masterObstacles(doc, pi) {
+    var pg = doc.pages[pi], out = [];
+    if (!pg || !pg.master) return out;
+    (doc.masters || []).forEach(function (m) {
+      if (m.id === pg.master) m.items.forEach(function (o) { if (o.wrap) out.push(o); });
+    });
+    return out;
+  }
 
   function aabb(it, grow) {
     var c = OP.itemCorners(it), x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -80,11 +95,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 
   /**
    * Wrap data for a text box: null when nothing wraps it, else
-   * {sig, avail(colX, colY, colW, y, h) -> {x, w} | null} with x relative to the column.
+   * {sig, avail(colX, colY, colW, y, h) -> [{x, w}, …] | null}: the free gaps of the column at
+   * that height, left to right, x relative to the column, each at least OP.WRAP_MIN_SIDE wide.
    */
   OP.wrapProfile = function (doc, box) {
-    var ix = OP.docIndex(doc), pi = ix.pageOf[box.id], list = ix.wraps && ix.wraps[pi];
-    if (!list || !list.length) return null;
+    var ix = OP.docIndex(doc), pi = ix.pageOf[box.id];
+    var list = ((ix.wraps && ix.wraps[pi]) || []).concat(pi >= 0 ? masterObstacles(doc, pi) : []);
+    if (!list.length) return null;
     var bb = aabb(box, 0);
     var obs = list.filter(function (o) {
       if (o.id === box.id || o.hidden || (o.group && o.group === box.group)) return false;
@@ -109,15 +126,15 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           for (var r = r0; r <= r1; r++) { if (p.min[r] < lo) lo = p.min[r]; if (p.max[r] > hi) hi = p.max[r]; }
           if (hi > lo) { lo /= s; hi /= s; if (hi > colX && lo < colX + colW) busy.push([Math.max(lo, colX), Math.min(hi, colX + colW)]); }
         }
-        if (!busy.length) return { x: 0, w: colW };
+        if (!busy.length) return [{ x: 0, w: colW }];
         busy.sort(function (a, b) { return a[0] - b[0]; });
-        var best = null, at = colX;
+        var gaps = [], at = colX, min = OP.WRAP_MIN_SIDE;
         busy.forEach(function (b) {
-          if (b[0] - at > (best ? best.w : 0)) best = { x: at - colX, w: b[0] - at };
+          if (b[0] - at >= min) gaps.push({ x: at - colX, w: b[0] - at });
           if (b[1] > at) at = b[1];
         });
-        if (colX + colW - at > (best ? best.w : 0)) best = { x: at - colX, w: colX + colW - at };
-        return (best && best.w >= 30) ? best : null;
+        if (colX + colW - at >= min) gaps.push({ x: at - colX, w: colX + colW - at });
+        return gaps.length ? gaps : null;
       }
     };
     if (cacheN++ > 400) { cache = {}; cacheN = 0; }

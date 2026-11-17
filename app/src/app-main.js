@@ -429,7 +429,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       head('Not possible'),
       list(['Saving back to .pub. The format is undocumented; work is saved as an .opub project and exported as PDF, PNG, JPEG or SVG',
         'Publisher 98, 2000 and older files',
-        'Catalogue merge, design checker, spot-colour separations, text on both sides of a wrapped object',
+        'Catalogue merge and spot-colour separations',
         OP.desktop ? 'Vector CMYK needs Ghostscript installed on this computer (it is not bundled); without it CMYK output is a picture PDF with no colour profile' : 'Vector PDF, printing, the spelling checker and script plug-ins need the desktop app'])
     ], null, { wide: true });
   };
