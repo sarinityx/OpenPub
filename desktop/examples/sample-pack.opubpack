@@ -1,0 +1,29 @@
+{
+  "openpubPack": 1,
+  "name": "Sample pack",
+  "author": "OpenPub",
+  "description": "One template, two building blocks and a colour scheme to show the format.",
+  "colours": [
+    { "name": "Sample scheme", "colours": ["#17384a", "#0b6e99", "#d4249b", "#f3d21b", "#f8fafb", "#1b2228"] }
+  ],
+  "blocks": [
+    { "name": "Sale tag", "category": "Sample pack", "assets": {}, "items": [
+      { "type": "shape", "kind": "star16", "x": 0, "y": 0, "w": 150, "h": 150, "fill": { "type": "solid", "color": "#d4249b" }, "stroke": null },
+      { "type": "shape", "kind": "rect", "x": 15, "y": 45, "w": 120, "h": 60, "fill": null, "stroke": null,
+        "text": { "valign": "middle", "pad": [2, 2, 2, 2], "paras": [ { "align": "center", "runs": [ { "t": "SALE", "font": "Arial", "size": 34, "b": true, "color": "#ffffff" } ] } ] } }
+    ] },
+    { "name": "Footer strip", "category": "Sample pack", "assets": {}, "items": [
+      { "type": "shape", "kind": "rect", "x": 0, "y": 0, "w": 480, "h": 36, "fill": { "type": "solid", "color": "#17384a" }, "stroke": null,
+        "text": { "valign": "middle", "pad": [10, 2, 10, 2], "paras": [ { "align": "center", "runs": [ { "t": "example.org   |   (02) 5550 0000   |   12 Example Street", "font": "Arial", "size": 12, "color": "#ffffff" } ] } ] } }
+    ] }
+  ],
+  "templates": [
+    { "name": "Notice (A4)", "doc": { "name": "Notice", "w": 595.28, "h": 841.89, "bleed": 0, "margins": 42.5, "assets": {}, "pages": [ { "bg": "#ffffff", "items": [
+      { "type": "shape", "kind": "rect", "x": 0, "y": 0, "w": 595.28, "h": 150, "fill": { "type": "solid", "color": "#0b6e99" }, "stroke": null },
+      { "type": "shape", "kind": "rect", "x": 42, "y": 36, "w": 511, "h": 90, "fill": null, "stroke": null,
+        "text": { "valign": "middle", "pad": [3, 3, 3, 3], "paras": [ { "align": "left", "runs": [ { "t": "Notice", "font": "Arial", "size": 64, "b": true, "color": "#ffffff" } ] } ] } },
+      { "type": "shape", "kind": "rect", "x": 42, "y": 190, "w": 511, "h": 420, "fill": null, "stroke": null,
+        "text": { "valign": "top", "pad": [3, 3, 3, 3], "paras": [ { "align": "left", "after": 8, "runs": [ { "t": "What is happening", "font": "Arial", "size": 26, "b": true, "color": "#1b2228" } ] }, { "align": "left", "runs": [ { "t": "Write the details here: when, where, and who to contact.", "font": "Arial", "size": 16, "color": "#1b2228" } ] } ] } }
+    ] } ] } }
+  ]
+}

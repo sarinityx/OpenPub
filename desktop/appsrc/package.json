@@ -1,0 +1,11 @@
+{
+  "name": "openpub",
+  "productName": "OpenPub",
+  "version": "1.1.1",
+  "description": "Page-layout editor that opens Microsoft Publisher files",
+  "main": "main.js",
+  "author": "Sem",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": { "nspell": "^2.1.5" }
+}
