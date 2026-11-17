@@ -75,21 +75,6 @@ jobs:
           if (-not (Test-Path $gs)) { Get-ChildItem $dest | Format-Table Name; throw 'gswin64c.exe not found after unpacking' }
           & $gs --version
 
-      # The font drop-down checks type "liberation s" and pick Liberation Serif.
-      - name: Install Liberation fonts 2.1.5
-        run: |
-          $tgz = Join-Path $env:RUNNER_TEMP 'liberation.tar.gz'
-          Invoke-WebRequest 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz' -OutFile $tgz
-          $dir = Join-Path $env:RUNNER_TEMP 'liberation'
-          New-Item -ItemType Directory $dir | Out-Null
-          tar -xzf $tgz -C $dir
-          $reg = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
-          Get-ChildItem $dir -Recurse -Filter *.ttf | ForEach-Object {
-            Copy-Item $_.FullName 'C:\Windows\Fonts\' -Force
-            New-ItemProperty -Path $reg -Name ($_.BaseName + ' (TrueType)') -Value $_.Name -PropertyType String -Force | Out-Null
-          }
-          (Get-ChildItem 'C:\Windows\Fonts\Liberation*.ttf').Count
-
       - name: Install dependencies
         run: npm ci
 
@@ -104,6 +89,10 @@ jobs:
 
       - name: Package (folder, zip and installer)
         run: npm run package:win
+
+      # the packaged (asar) app: command-line file, dictionary, fonts, CMYK through Ghostscript, no network
+      - name: Packaged smoke test
+        run: node tools/smoke-packaged.js
 
       # installs silently per user and per machine, opens files through the associations, uninstalls
       - name: Installer tests

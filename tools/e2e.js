@@ -572,12 +572,28 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
     const c = OP.pageToCanvas(d, d.pages[0], 1), px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let darkest = 255; for (let i = 0; i < px.length; i += 4) darkest = Math.min(darkest, px[i]);
     const svg = OP.pageToSvg(d, d.pages[0]);
-    return { darkest, svgWidth: (svg.match(/stroke-width="([\d.]+)"/) || [])[1] };
+    const xml = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    return { darkest, svgWidth: (svg.match(/stroke-width="([\d.]+)"/) || [])[1], svgOk: !xml.querySelector('parsererror'), viewBox: xml.documentElement.getAttribute('viewBox') };
   });
+  ok(thin.svgOk && thin.viewBox === '0 0 200 100', 'an exported SVG file is well-formed XML (viewBox ' + thin.viewBox + ')');
   ok(thin.darkest < 60 && thin.svgWidth === '0.25', 'a 0.25 pt rule shows dark on screen (darkest ' + thin.darkest + ') and keeps 0.25 pt in vector output');
   await page.evaluate(() => { const A = OP.app, d = OP.newDoc(); const w = OP.newWordArt('Certificate\nof\nCompletion', 40, 40, 300, 120); d.pages[0].items.push(w); A.loadDoc(d); A.setSel([w.id]); A.refreshPanels(); });
   await page.selectOption('#waAlign', 'left');
   ok(await page.evaluate(() => OP.app.selItems()[0].wa.align === 'left'), 'WordArt panel: Lines sets the alignment');
+
+  // ---- print layouts: a preview of the sheets before printing or saving the PDF
+  await page.evaluate(() => { const A = OP.app; A.addPage(); A.addPage(); A.dlgSheets('print'); });
+  await page.waitForFunction(() => document.querySelector('#shPreview canvas') && /Sheet 1 of 3/.test(document.getElementById('shPvLabel').textContent));
+  const pv1 = await page.evaluate(() => { const c = document.querySelector('#shPreview canvas'); return { label: document.getElementById('shPvLabel').textContent, ratio: c.width / c.height }; });
+  await page.selectOption('#shLay', 'book');
+  await page.waitForFunction(() => /\(front\)/.test(document.getElementById('shPvLabel').textContent));
+  await page.click('button[aria-label="Next sheet"]');
+  await page.waitForFunction(() => /\(back\)/.test(document.getElementById('shPvLabel').textContent));
+  const pv2 = await page.evaluate(() => { const c = document.querySelector('#shPreview canvas'); return { label: document.getElementById('shPvLabel').textContent, ratio: c.width / c.height }; });
+  ok(/Sheet 1 of 3, 210 × 297 mm/.test(pv1.label) && Math.abs(pv1.ratio - 210 / 297) < 0.02 && /Sheet 2 of 2, 420 × 297 mm \(back\)/.test(pv2.label) && Math.abs(pv2.ratio - 420 / 297) < 0.02,
+    'print layouts preview shows each sheet: ' + pv1.label + ' / booklet ' + pv2.label);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { OP.app.S.dirty = false; });
   await page.evaluate(() => { OP.app.S.dirty = false; });
 
   // ---- a bad file gives a readable error, not a crash
