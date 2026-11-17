@@ -442,9 +442,12 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         (texts.length ? texts : [it]).forEach(function (x) { if (x.text) x.text.pad = [v, v, v, v]; });
         if (A.isEditing()) A.setEditorBox(it); else live(f);
       })], 'tPad'));
-      rows.push(row('Overflow', [select('tFit', tx.fit || 'none', [['none', 'Clip to box'], ['shrink', 'Shrink text to fit']], function (v) {
+      var fits = [['none', 'Clip to box'], ['shrink', 'Shrink text to fit']];
+      if (OP.canGrow(S.doc, it) || tx.fit === 'grow') fits.push(['grow', 'Grow box to fit']);
+      rows.push(row('Overflow', [select('tFit', tx.fit || 'none', fits, function (v) {
         (texts.length ? texts : [it]).forEach(function (x) { if (x.text) x.text.fit = v; });
         live(true);
+        if (v === 'grow' && !A.isEditing()) A.refreshPanels(); // the box height has just changed
       }, 'When text does not fit')], 'tFit'));
       if (!A.isEditing()) rows.push(h('div', { class: 'row wrap' }, [
         btn('Edit text', function () { A.beginEdit(it); }),

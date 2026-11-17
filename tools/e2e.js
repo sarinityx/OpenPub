@@ -117,6 +117,53 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   ok(JSON.stringify(reload) === JSON.stringify(ps.paras), 'paragraph spacing and indents survive save and reload');
   await page.evaluate((id) => { const A = OP.app; A.page().items = A.page().items.filter(i => i.id !== id); A.setSel([]); A.commit(); A.refreshAll(); }, pid);
 
+  // ---- text overflow: "Grow box to fit"
+  const gid = await page.evaluate(() => {
+    const A = OP.app, it = OP.newTextBox(60, 600, 170, 60, [OP.newPara([OP.newRun('Short', { size: 12, font: 'Arial' })])]);
+    it.fill = { type: 'solid', color: '#ffffee' }; // a filled box is kept when its text is deleted
+    A.page().items.push(it); A.commit(); A.setSel([it.id]);
+    return it.id;
+  });
+  const box = () => page.evaluate((id) => { const it = OP.app.find(id); return { w: it.w, h: it.h, y: it.y, fit: it.text.fit, need: OP.round(OP.textHeight(it), 2) }; }, gid);
+  ok(await page.evaluate(() => Array.from(document.querySelectorAll('#tFit option')).some(o => o.value === 'grow')), 'overflow offers "Grow box to fit" for a plain text box');
+  await page.selectOption('#tFit', 'grow');
+  const g1 = await box();
+  ok(g1.fit === 'grow' && g1.h === g1.need && g1.h < 60 && g1.w === 170, 'choosing it fits the box to one line of text: ' + g1.h + ' pt high');
+  await page.evaluate((id) => OP.app.beginEdit(OP.app.find(id)), gid);
+  await page.waitForSelector('#ted');
+  await page.keyboard.press('Control+End');
+  for (let i = 1; i <= 4; i++) { await page.keyboard.press('Enter'); await page.keyboard.type('Line ' + i); }
+  const g2 = await box();
+  ok(g2.h > g1.h * 3 && g2.w === 170 && g2.y === g1.y, 'typing more lines grows the box downward while editing: ' + g1.h + ' -> ' + g2.h + ' pt, same top and width');
+  await page.keyboard.press('Escape');
+  const g3 = await box();
+  ok(g3.h === g3.need && g3.h === g2.h, 'the height is kept when editing ends: ' + g3.h + ' pt');
+  await page.click('#tbUndo');
+  const gu = await box();
+  await page.click('#tbRedo');
+  const gr = await box();
+  ok(gu.h === g1.h && gr.h === g3.h, 'undo and redo step the text and the height together: ' + gu.h + ' / ' + gr.h + ' pt');
+  await page.evaluate((id) => OP.app.beginEdit(OP.app.find(id)), gid);
+  await page.waitForSelector('#ted');
+  await page.keyboard.press('Control+a'); await page.keyboard.press('Delete');
+  const gd = await box();
+  await page.keyboard.press('Escape');
+  const g4 = await box();
+  // the emptied paragraph takes the editor's default size, so one line may differ a little from the 12 pt line above
+  const oneLine = await page.evaluate((id) => { const it = OP.app.find(id), p = it.text.paras; return p.length === 1 ? OP.round(OP.layoutItemText(it).lines[0].h + it.text.pad[1] + it.text.pad[3], 2) : -1; }, gid);
+  ok(g4.h < g3.h && Math.abs(g4.h - oneLine) < 0.05 && Math.abs(gd.h - g4.h) < 0.05 && g4.w === 170, 'deleting the text shrinks it to one line, not below: ' + g3.h + ' -> ' + g4.h + ' pt (one line is ' + oneLine + ' pt)');
+  const gload = await page.evaluate((id) => { const d = OP.normaliseDoc(JSON.parse(JSON.stringify(OP.app.S.doc))); for (const pg of d.pages) for (const it of pg.items) if (it.id === id) return it.text.fit; return null; }, gid);
+  ok(gload === 'grow', '"Grow box to fit" survives save and reload');
+  const linked = await page.evaluate((id) => {
+    const A = OP.app; A.page().items = A.page().items.filter(i => i.id !== id); A.commit();
+    const pi = A.S.doc.pages.findIndex(pg => pg.items.some(i => i.next)), it = A.S.doc.pages[pi].items.find(i => i.next);
+    A.gotoPage(pi); A.setSel([it.id]); A.refreshPanels();
+    const opts = Array.from(document.querySelectorAll('#tFit option')).map(o => o.value);
+    A.setSel([]); A.gotoPage(0);
+    return opts;
+  }, gid);
+  ok(linked.length === 2 && linked.indexOf('grow') < 0, 'a linked text box is not offered "Grow box to fit": ' + linked.join(', '));
+
   // ---- add shape + text box with tools
   await page.keyboard.press('Escape');
   await page.keyboard.press('r');
