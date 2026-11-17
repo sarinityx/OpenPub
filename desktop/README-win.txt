@@ -1,4 +1,4 @@
-OpenPub 1.1.1 - a page-layout editor that opens Microsoft Publisher (.pub) files
+OpenPub 1.2.0 - a page-layout editor that opens Microsoft Publisher (.pub) files
 ================================================================================
 
 INSTALL
