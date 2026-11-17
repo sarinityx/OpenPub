@@ -19,6 +19,9 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
 - Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 76 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
+- The font drop-down checks need the Liberation fonts installed (they type "liberation s" and pick Liberation Serif).
+- Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
+- CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed. `test-out/` is uploaded as an artifact.
 - Always run `npm run build` before testing by hand; the tests load the built file, not `app/src`.
 
 ## Layout
