@@ -1,12 +1,12 @@
 # OpenPub – status
 
-Version 1.1.1, 12 November 2026.
+Version 1.2.0, 18 November 2026.
 
-Publisher replacement. Windows desktop app (Electron 45, portable folder, `OpenPub.exe`), built from a single-file editor that also runs in a browser.
+Publisher replacement. Windows desktop app (Electron 45; installer or portable folder, `OpenPub.exe`), built from a single-file editor that also runs in a browser.
 
 ## What is built
 
-### 1.2 (in progress)
+### 1.2.0
 - Home › Align on the ribbon: left, centre, right, top, middle, bottom, space evenly across and down. With one object it aligns to the page. Buttons are greyed out until there is something to move; spacing needs three or more objects.
 - Text panel: space before, line spacing as a multiple or exactly in points, left and right indents, first-line indent (negative for a hanging indent).
 - Text overflow "Grow box to fit": the box follows its text downward from the top edge, live while typing, never narrower or wider and never below one line. Not offered for linked boxes or boxes with columns.
@@ -80,7 +80,5 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Backlog
 
-- Code signing.
-- Catalogue merge, design checker, spot colours.
-- Per-cell table borders on import (needs a sample file); compound outlines; true bent WordArt glyphs.
-- CI: consider a Linux job (planned for 1.3).
+- Planned for 1.3: named paragraph and character styles, hyperlinks (also in exported PDF), spot colours, catalogue merge, properly bent WordArt, code signing, a Linux CI job.
+- Per-cell table borders on import (needs a sample file); compound outlines; multi-column boxes and EMF pictures from real files (need sample files).
