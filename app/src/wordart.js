@@ -30,6 +30,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     canDown: { label: 'Curve down', t: function (u) { return 0.2 * Math.sin(Math.PI * u); }, b: function (u) { return 0.8 + 0.2 * Math.sin(Math.PI * u); } }
   };
   var ARC = { archUp: 'Arch up', archDown: 'Arch down', circle: 'Circle' };
+  /** How lines of different lengths share the width (straight and envelope warps). */
+  var ALIGNS = { center: 'Centre', left: 'Left', right: 'Right', stretch: 'Stretch each line' };
+  OP.WA_ALIGNS = Object.keys(ALIGNS).map(function (k) { return [k, ALIGNS[k]]; });
   OP.WARPS = Object.keys(ENV).map(function (k) { return [k, ENV[k].label]; }).concat(Object.keys(ARC).map(function (k) { return [k, ARC[k]]; }));
   /** Publisher / Office shape type -> warp name. */
   OP.WARP_OF_SHAPE = {
@@ -43,7 +46,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var it = OP.newShape('rect', x, y, w, h);
     it.fill = { type: 'solid', color: '#1d1c19' };
     it.stroke = null;
-    it.wa = { text: text || 'Your text', font: 'Arial Black', b: false, i: false, warp: 'plain' };
+    it.wa = { text: text || 'Your text', font: 'Arial Black', b: false, i: false, warp: 'plain', align: 'center' };
     it.name = 'WordArt';
     return it;
   };
@@ -97,15 +100,28 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       });
     } else {
       var env = ENV[wa.warp] || ENV.plain, n = lines.length;
-      lines.forEach(function (line, li) {
-        var ad = advances(line), tm = ctx.measureText(line);
+      // 'stretch' (older documents): every line fills the width on its own. 'center' / 'left' / 'right' (Office's
+      // default, and new WordArt): one horizontal scale from the longest line, so letters match from line to line.
+      var align = ALIGNS[wa.align] ? wa.align : 'stretch', shared = align !== 'stretch';
+      var ads = lines.map(advances), maxW = Math.max.apply(null, ads.map(function (a) { return a.w; }));
+      var metrics = lines.map(function (line) {
+        var tm = ctx.measureText(line);
         var asc = tm.actualBoundingBoxAscent > 0 ? tm.actualBoundingBoxAscent : F * 0.72;
         var desc = tm.actualBoundingBoxDescent > 0 ? tm.actualBoundingBoxDescent : 0;
         if (asc + desc < F * 0.3) { asc = F * 0.72; desc = 0; }
-        var sx = w / ad.w;
+        return { asc: asc, desc: desc };
+      });
+      if (shared) {
+        var mA = Math.max.apply(null, metrics.map(function (m) { return m.asc; })), mD = Math.max.apply(null, metrics.map(function (m) { return m.desc; }));
+        metrics = metrics.map(function () { return { asc: mA, desc: mD }; });
+      }
+      lines.forEach(function (line, li) {
+        var ad = ads[li], asc = metrics[li].asc, desc = metrics[li].desc;
+        var sx = w / (shared ? maxW : ad.w), used = ad.w * sx;
+        var ox = align === 'center' ? (w - used) / 2 : align === 'right' ? w - used : 0;
         ad.chars.forEach(function (ch, i) {
           if (ch === ' ') return;
-          var u0 = ad.xs[i] / ad.w, u1 = ad.xs[i + 1] / ad.w, uc = (u0 + u1) / 2;
+          var u0 = (ox + ad.xs[i] * sx) / w, u1 = (ox + ad.xs[i + 1] * sx) / w, uc = (u0 + u1) / 2;
           var T = env.t(uc), B = env.b(uc), band = (B - T) / n, top = T + band * li;
           var gap = n > 1 ? 0.06 : 0; // breathing room between stacked lines
           var sy = Math.max(0.01, band * (1 - gap) * h / (asc + desc));
@@ -113,7 +129,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           var m0 = (env.t(u0) + env.b(u0)) / 2, m1 = (env.t(u1) + env.b(u1)) / 2;
           var slope = (u1 > u0) ? ((m1 - m0) * h) / ((u1 - u0) * w) : 0; // dy/dx of the mid line
           var adv = (ad.xs[i + 1] - ad.xs[i]) * sx;
-          out.push({ ch: ch, m: [sx, slope * sx, 0, sy, ad.xs[i] * sx, base - slope * adv / 2] });
+          out.push({ ch: ch, m: [sx, slope * sx, 0, sy, ox + ad.xs[i] * sx, base - slope * adv / 2] });
         });
       });
     }
