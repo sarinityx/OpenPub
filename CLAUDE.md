@@ -17,7 +17,8 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
-- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript on PATH. With all of them: 76 checks, 0 skipped.
+- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 76 checks, 0 skipped.
+- Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
 - Always run `npm run build` before testing by hand; the tests load the built file, not `app/src`.
 
 ## Layout
@@ -49,4 +50,4 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - UI text: Australian English, sentence case, plain words.
 - Version number lives in four places; change all of them for a release: `package.json`, `desktop/appsrc/package.json`, `OP.VERSION` in `app/src/app-plugins.js`, first line of `desktop/README-win.txt`.
 - Add or extend a check in `tools/e2e-desktop.js` (desktop features) or `tools/e2e.js` (editor features) with every feature or fix. Native dialogs are stubbed at the top of `e2e-desktop.js`.
-- The tests have only ever been run on Linux. On Windows, treat a test failure as possibly a test-script problem first.
+- The tests pass on Linux and on Windows 11. Shell commands in test scripts must work in both `cmd.exe` and POSIX shells: quote paths with double quotes, not single quotes.

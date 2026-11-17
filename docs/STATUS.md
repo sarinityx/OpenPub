@@ -27,17 +27,15 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 76 desktop end-to-end checks (Electron on Linux, clean profile per run), 37 browser checks, parser run over the sample files: all pass as of this version.
-- Packaged (asar) Linux build smoke-tested: file from command line, ribbon, dictionary, fonts, vector CMYK, zero network requests.
-- CMYK conversion tested with Ghostscript 9.56 code (a WASM build standing in for a system install) and a FOGRA39 profile.
-- Windows: the packaged `.exe` starts and shows the ribbon UI and loads installed fonts (seen in one user screenshot). Nothing else has been checked on Windows.
+- 76 desktop end-to-end checks (Electron, clean profile per run), 37 browser checks, parser run over the sample files: all pass on Linux and on Windows 11 as of this version.
+- Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
+- Packaged (asar) build smoke-tested on Linux and on Windows (`npm run package:win` run on Windows, including the zip): file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests.
+- CMYK conversion tested with Ghostscript 9.56 code (a WASM build standing in for a system install) and a FOGRA39 profile, and with Ghostscript 10.08 installed on Windows.
+- `npm start` runs the app from source on Windows.
 
 ## Not tested
 
-- The test scripts have never been run on Windows.
 - Printing to a real printer, and the Windows print dialog.
-- Ghostscript detection on Windows (`Program Files\gs\...\gswin64c.exe`).
-- `npm run package:win` run on Windows itself (so far cross-built from Linux), including its zip step.
 - Import of master-page objects, multi-column boxes and EMF pictures from real files (no sample has them).
 
 ## Known limits
@@ -54,4 +52,4 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 - Catalogue merge, design checker, spot colours.
 - Wrap on both sides of an obstacle; live wrap while typing.
 - Per-cell table borders on import; true bent WordArt glyphs.
-- Run the test suite on Windows and fix what it finds.
+- CI: run the web and desktop tests on `windows-latest` (the PDF checks need poppler, pikepdf and Ghostscript installed in the workflow, or they skip).
