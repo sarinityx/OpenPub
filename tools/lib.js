@@ -41,13 +41,25 @@ exports.launchChrome = function () {
   return chromium.launch(o);
 };
 
-// Electron from node_modules running the unpackaged desktop app with a clean profile.
-exports.launchDesktop = function (extraArgs) {
+// Electron from node_modules running the unpackaged desktop app with a clean profile (app.profile).
+exports.launchDesktop = async function (extraArgs) {
   const { _electron } = require('playwright-core');
   const profile = path.join(os.tmpdir(), 'openpub-test-' + Date.now());
-  return _electron.launch({
+  const app = await _electron.launch({
     executablePath: require('electron'),
     args: NOSANDBOX.concat(['--user-data-dir=' + profile, exports.DESKTOP_APP], extraArgs || [])
+  });
+  app.profile = profile;
+  return app;
+};
+// Start the unpackaged app a second time with the same profile, as Windows does when a file is double-clicked
+// while OpenPub is open. Resolves with the exit code ('timeout' if it is still running after 20 s).
+exports.secondInstance = function (profile, extraArgs) {
+  const { spawn } = require('child_process');
+  const child = spawn(require('electron'), NOSANDBOX.concat(['--user-data-dir=' + profile, exports.DESKTOP_APP], extraArgs || []), { stdio: 'ignore' });
+  return new Promise((resolve) => {
+    const t = setTimeout(() => { child.kill(); resolve('timeout'); }, 20000);
+    child.on('exit', (code) => { clearTimeout(t); resolve(code); });
   });
 };
 // A packaged build (path to the executable).
