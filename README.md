@@ -32,6 +32,7 @@ Output in `desktop/dist/`: the portable folder `OpenPub-win32-x64/`, its zip `Op
 npm run test:web        browser build, needs Google Chrome
 npm run test:desktop    desktop app
 npm run test:parser     renders every sample .pub to test-out/parser
+node tools/smoke-packaged.js   checks the packaged app (after package:win)
 npm run test:installer  Windows: installs, checks and uninstalls the built installer
 ```
 

@@ -407,7 +407,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       return '<svg x="' + r(e.x) + '" y="' + r(e.y) + '" width="' + r(W * e.scale) + '" height="' + r(H * e.scale) + '" viewBox="' + r(-b) + ' ' + r(-b) + ' ' + r(W) + ' ' + r(H) + '" overflow="hidden">' +
         '<defs>' + defs.join('') + '</defs><rect x="' + r(-b) + '" y="' + r(-b) + '" width="' + r(W) + '" height="' + r(H) + '" fill="' + esc(page.bg || '#ffffff') + '"/>' + body.join('') + '</svg>';
     }
-    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + r(W / MM, 2) + 'mm" height="' + r(H / MM, 2) + 'mm" viewBox=""' + r(-b) + ' ' + r(-b) + ' ' + r(W) + ' ' + r(H) + '">' +
-      '<defs>' + defs.join('') + '</defs><rect x="' + r(-b) + '" y="' + r(-b) + '" width="' + r(W) + '" height="' + r(H) + '" fill="' + esc(page.bg || '#ffffff') + '"/>' + body.join('') + '</svg>';
+    // fonts the editor reaches by an alias (see A.aliasFonts) must resolve the same way in the file
+    var aliasCss = OP.fontAliasCss ? OP.fontAliasCss() : '';
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + r(W / MM, 2) + 'mm" height="' + r(H / MM, 2) + 'mm" viewBox="' + r(-b) + ' ' + r(-b) + ' ' + r(W) + ' ' + r(H) + '">' +
+      '<defs>' + (aliasCss ? '<style>' + esc(aliasCss) + '</style>' : '') + defs.join('') + '</defs><rect x="' + r(-b) + '" y="' + r(-b) + '" width="' + r(W) + '" height="' + r(H) + '" fill="' + esc(page.bg || '#ffffff') + '"/>' + body.join('') + '</svg>';
   };
 })();

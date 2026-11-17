@@ -291,6 +291,28 @@ const sh = lib.sh;
     return rs.map(r => r.text);
   });
   ok(deskFont.length === 1 && /Nowhere Sans/.test(deskFont[0]), 'design check reports a font that is not installed: ' + deskFont[0]);
+  // fonts known by an older Windows name (a face's full name, not its family) are installed and draw
+  const legacy = await ev(async () => {
+    const A = OP.app, all = await window.queryLocalFonts(), fam = new Set(all.map(f => f.family));
+    const names = [...new Set(all.map(f => f.fullName).filter(n => n && !fam.has(n)))];
+    const c = document.createElement('canvas').getContext('2d'), t = 'Hamburgefonstiv WMQ 0123';
+    const w = (f) => { c.font = '40px ' + f; return c.measureText(t).width; };
+    const renders = (n) => Math.abs(w('"' + n + '", monospace') - w('monospace')) > 0.5 || Math.abs(w('"' + n + '", serif') - w('serif')) > 0.5;
+    const broken = names.filter(n => !renders(n)).slice(0, 25);
+    const aliased = A.aliasFonts(broken);
+    await Promise.all(broken.map(n => document.fonts.load('40px "' + n + '"')));
+    const still = broken.filter(n => !renders(n));
+    const it = OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('Hello', { size: 12, font: names[0] })])]);
+    A.page().items.push(it);
+    const flagged = A.checkDesign().filter(r => r.id === it.id && r.kind === 'font').length;
+    A.page().items = A.page().items.filter(i => i !== it); A.commit(); A.showTab('props');
+    // the vector PDF / print HTML and SVG files carry the same aliases
+    const html = OP.sheetsHtml(A.S.doc, OP.sheetsPlain(A.S.doc, [0], [-1], { bleed: false, marks: false })).html;
+    const inOutput = !broken.length || (html.indexOf('font-family: "' + broken[0] + '"') >= 0 && OP.pageToSvg(A.S.doc, A.page()).indexOf(broken[0]) >= 0);
+    return { names: names.length, sample: names[0], broken: broken.length, aliased, still, flagged, inOutput };
+  });
+  ok(legacy.names > 0 && legacy.still.length === 0 && legacy.aliased === legacy.broken && legacy.flagged === 0 && legacy.inOutput,
+    'fonts used by their full name draw and are not reported missing (' + legacy.names + ' such names, ' + legacy.broken + ' needed an alias, e.g. ' + legacy.sample + ')' + (legacy.still.length ? ' still not drawing: ' + legacy.still.join(', ') : ''));
 
   // the font drop-down lists every font, whatever is already in the box
   await ev((id) => OP.app.setSel([id]), tid);
@@ -299,14 +321,28 @@ const sh = lib.sh;
   const fl = await ev(() => { const o = Array.from(document.querySelectorAll('.fontpop .fontopt')).map(e => e.textContent); return { n: o.length, cur: document.getElementById('tFont').value, nonMatching: o.filter(x => x.toLowerCase().indexOf(document.getElementById('tFont').value.toLowerCase()) < 0).length, on: (document.querySelector('.fontopt.on') || {}).textContent }; });
   ok(fl.n === nFonts && fl.nonMatching > 20 && fl.on === fl.cur, 'font drop-down shows all ' + fl.n + ' fonts with “' + fl.cur + '” in the box (' + fl.nonMatching + ' of them do not contain that name)');
   await page.screenshot({ path: path.join(OUT, '08a-fonts.png') });
-  await page.keyboard.type('liberation s');
+  // works with whatever fonts this computer has: find a name start shared by 2 to 11 installed fonts
+  const pick = await ev(() => {
+    const fams = Array.from(document.querySelectorAll('#fontlist option')).map(o => o.value), cur = document.getElementById('tFont').value;
+    for (const f of fams) {
+      if (f === cur) continue;
+      for (let n = 4; n <= f.length; n++) {
+        const q = f.slice(0, n).toLowerCase(), hits = fams.filter(x => x.toLowerCase().indexOf(q) >= 0);
+        if (hits.length >= 2 && hits.length < 12 && /\S$/.test(q)) return { q, font: f, hits: hits.length };
+        if (hits.length < 2) break;
+      }
+    }
+    return null;
+  });
+  ok(!!pick, 'found installed fonts to filter on: ' + JSON.stringify(pick));
+  await page.keyboard.type(pick.q);
   const flt = await ev(() => Array.from(document.querySelectorAll('.fontpop .fontopt')).map(e => e.textContent));
-  ok(flt.length >= 2 && flt.length < 12 && flt.every(x => /liberation s/i.test(x)), 'typing narrows the list: ' + flt.join(', '));
-  await page.locator('.fontpop .fontopt', { hasText: /^Liberation Serif$/ }).click();
-  ok(await ev((id) => OP.app.find(id).text.paras.every(p => p.runs.every(r => r.font === 'Liberation Serif')), tid) && await ev(() => !document.querySelector('.fontpop')), 'picking a font applies it and closes the list');
+  ok(flt.length === pick.hits && flt.every(x => x.toLowerCase().indexOf(pick.q) >= 0), 'typing "' + pick.q + '" narrows the list: ' + flt.join(', '));
+  await page.locator('.fontpop .fontopt').filter({ hasText: new RegExp('^' + pick.font.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$') }).click();
+  ok(await ev((a) => OP.app.find(a.id).text.paras.every(p => p.runs.every(r => r.font === a.font)), { id: tid, font: pick.font }) && await ev(() => !document.querySelector('.fontpop')), 'picking a font applies it and closes the list (' + pick.font + ')');
   await page.click('#tFont'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
   const kb = await ev((id) => OP.app.find(id).text.paras[0].runs[0].font, tid);
-  ok(kb !== 'Liberation Serif' && kb.length > 0, 'keyboard: arrow down + Enter picks the next font (' + kb + ')');
+  ok(kb !== pick.font && kb.length > 0, 'keyboard: arrow down + Enter picks the next font (' + kb + ')');
 
   // ---- 15c. text wrap + hyphenation through the UI
   const wr = await ev(() => {

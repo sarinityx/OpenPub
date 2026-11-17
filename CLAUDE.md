@@ -9,20 +9,21 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Install (also installs `desktop/appsrc` dependencies) | `npm install` |
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
-| Browser tests (94 checks, needs Google Chrome) | `npm run test:web` |
-| Desktop tests (81 checks) | `npm run test:desktop` |
+| Browser tests (96 checks, needs Google Chrome) | `npm run test:web` |
+| Desktop tests (83 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
 | Package Windows build, zip and installer into `desktop/dist` | `npm run package:win` |
+| Packaged app smoke test (after `package:win`) | `node tools/smoke-packaged.js` |
 | Installer test (Windows; installs, checks, uninstalls) | `npm run test:installer` |
 
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
-- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 81 checks, 0 skipped.
+- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 83 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
-- The font drop-down checks need the Liberation fonts installed (they type "liberation s" and pick Liberation Serif).
+- The font drop-down checks pick from whatever fonts are installed; no particular font is needed.
 - Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
-- CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed, then packages, builds the installer and runs the installer test (per user and per machine). `test-out/` and the installer are uploaded as artifacts.
+- CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed, then packages, runs the packaged smoke test, builds the installer and runs the installer test (per user and per machine). `test-out/` and the installer are uploaded as artifacts.
 - The installer test refuses to run if OpenPub is already installed (it uninstalls as part of the test). Without administrator rights it skips the per-machine half.
 - Always run `npm run build` before testing by hand; the tests load the built file, not `app/src`.
 

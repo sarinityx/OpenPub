@@ -573,15 +573,65 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   var COMMON_FONTS = ['Arial', 'Arial Black', 'Bahnschrift', 'Calibri', 'Cambria', 'Candara', 'Century Gothic', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel',
     'Courier New', 'Franklin Gothic Medium', 'Garamond', 'Georgia', 'Gill Sans MT', 'Impact', 'Lucida Sans Unicode', 'Palatino Linotype', 'Rockwell', 'Segoe UI',
     'Segoe UI Black', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
-  var localFonts = [];
-  /** Font families installed on this computer, once they have been read (empty until then). */
-  A.installedFonts = function () { return localFonts.slice(); };
+  var localFonts = [], localFaces = [], aliased = {};
+  /**
+   * Fonts installed on this computer, once they have been read (empty until then): family names plus each
+   * face's full name, because documents often use the older Windows names ("Arial Black", "Franklin Gothic Demi Cond")
+   * that the font list files under a larger family ("Arial", "Franklin Gothic").
+   */
+  A.installedFonts = function () {
+    var seen = {};
+    localFonts.forEach(function (n) { seen[n] = true; });
+    localFaces.forEach(function (f) { if (f.fullName) seen[f.fullName] = true; });
+    return Object.keys(seen);
+  };
+  var probe = null;
+  function renders(name) {
+    // a font renders when text in it measures differently from both fallbacks
+    probe = probe || document.createElement('canvas').getContext('2d');
+    var t = 'Hamburgefonstiv WMQ 0123', q = '"' + name.replace(/"/g, '') + '"', w = function (f) { probe.font = '40px ' + f; return probe.measureText(t).width; };
+    return Math.abs(w(q + ', monospace') - w('monospace')) > 0.5 || Math.abs(w(q + ', serif') - w('serif')) > 0.5;
+  }
+  /**
+   * Some installed fonts do not draw under the name a document uses (Chrome matches family names, and
+   * "Franklin Gothic Demi Cond" is a face of "Franklin Gothic"). Point such names at the installed face with
+   * @font-face local(), which matches full and PostScript names.
+   */
+  A.aliasFonts = function (names) {
+    if (!localFaces.length) return 0;
+    var byName = {}, css = '', n = 0;
+    localFaces.forEach(function (f) {
+      if (f.fullName) byName[f.fullName.toLowerCase()] = f;
+      if (f.postscriptName) byName[f.postscriptName.toLowerCase().replace(/-/g, ' ')] = byName[f.postscriptName.toLowerCase().replace(/-/g, ' ')] || f;
+    });
+    names.forEach(function (name) {
+      var key = String(name || '').toLowerCase(), f = byName[key];
+      if (!f || aliased[key] || renders(name)) return;
+      aliased[key] = true; n++;
+      var src = 'local("' + f.fullName.replace(/"/g, '') + '")' + (f.postscriptName ? ', local("' + f.postscriptName.replace(/"/g, '') + '")' : '');
+      css += '@font-face { font-family: "' + String(name).replace(/"/g, '') + '"; src: ' + src + '; }\n';
+    });
+    if (css) document.head.appendChild(h('style', { 'data-font-alias': '', text: css }));
+    return n;
+  };
+  /** The alias rules, for output that is drawn elsewhere (vector PDF and print HTML, SVG files). */
+  OP.fontAliasCss = function () {
+    return Array.prototype.map.call(document.querySelectorAll('style[data-font-alias]'), function (s) { return s.textContent; }).join('');
+  };
+  function docFonts() {
+    var names = {};
+    S.doc.pages.concat(S.doc.masters || []).forEach(function (p) { p.items.forEach(function (it) {
+      if (it.text) it.text.paras.forEach(function (pa) { pa.runs.forEach(function (r) { names[r.font] = true; }); });
+      if (it.wa && it.wa.font) names[it.wa.font] = true;
+    }); });
+    return Object.keys(names);
+  }
   A.updateFontList = function () {
-    var names = {}, dl = $('fontlist');
-    COMMON_FONTS.concat(localFonts).forEach(function (n) { names[n] = true; });
-    S.doc.pages.forEach(function (p) { p.items.forEach(function (it) { if (it.text) it.text.paras.forEach(function (pa) { pa.runs.forEach(function (r) { names[r.font] = true; }); }); }); });
+    var names = {}, dl = $('fontlist'), used = docFonts();
+    COMMON_FONTS.concat(localFonts, used).forEach(function (n) { names[n] = true; });
     dl.innerHTML = '';
     Object.keys(names).sort().forEach(function (n) { dl.appendChild(h('option', { value: n })); });
+    A.aliasFonts(used);
   };
   /** Chrome and Edge can list installed fonts after the user allows it. */
   /** Read the fonts installed on this computer into the font list. quiet = no messages (start-up). */
@@ -591,6 +641,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var fonts = await window.queryLocalFonts(), seen = {};
       fonts.forEach(function (f) { seen[f.family] = true; });
       localFonts = Object.keys(seen);
+      localFaces = fonts.map(function (f) { return { family: f.family, fullName: f.fullName, postscriptName: f.postscriptName }; });
       A.updateFontList();
       if (!quiet) A.toast(localFonts.length + ' installed font families added to the font list.');
       return localFonts.length;
