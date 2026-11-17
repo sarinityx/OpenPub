@@ -185,14 +185,18 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   // ---------------------------------------------------------------- properties
   A.showTab = function (t) {
     S.tab = t;
-    $('tabProps').classList.toggle('on', t === 'props'); $('tabLayers').classList.toggle('on', t === 'layers');
-    $('props').hidden = t !== 'props'; $('layers').hidden = t !== 'layers';
+    [['tabProps', 'props'], ['tabLayers', 'layers'], ['tabCheck', 'check']].forEach(function (p) {
+      var tab = $(p[0]), pane = $(p[1]);
+      if (tab) { tab.classList.toggle('on', t === p[1]); tab.setAttribute('aria-selected', t === p[1] ? 'true' : 'false'); }
+      if (pane) pane.hidden = t !== p[1];
+    });
     A.refreshPanels();
   };
 
   A.refreshPanels = function () {
     if (!S.doc) return;
     if (S.tab === 'layers') { buildLayers(); return; }
+    if (S.tab === 'check') { if (A.buildCheck) A.buildCheck(); return; }
     var root = $('props'), keep = root.scrollTop;
     root.innerHTML = '';
     var sel = A.selItems();
@@ -570,6 +574,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     'Courier New', 'Franklin Gothic Medium', 'Garamond', 'Georgia', 'Gill Sans MT', 'Impact', 'Lucida Sans Unicode', 'Palatino Linotype', 'Rockwell', 'Segoe UI',
     'Segoe UI Black', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
   var localFonts = [];
+  /** Font families installed on this computer, once they have been read (empty until then). */
+  A.installedFonts = function () { return localFonts.slice(); };
   A.updateFontList = function () {
     var names = {}, dl = $('fontlist');
     COMMON_FONTS.concat(localFonts).forEach(function (n) { names[n] = true; });
