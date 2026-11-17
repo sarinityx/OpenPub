@@ -1,18 +1,35 @@
 OpenPub 1.1.1 - a page-layout editor that opens Microsoft Publisher (.pub) files
 ================================================================================
 
-START
-  Double-click OpenPub.exe. Nothing is installed; keep this folder together
-  (the .exe needs the files beside it). You can move the whole folder anywhere,
-  e.g. C:\Program Files\OpenPub, and pin OpenPub.exe to the taskbar.
+INSTALL
+  Two ways, both the same app:
+
+  Installer (OpenPub-<version>-win64-setup.exe)
+    Choose "Only for me" (no administrator rights needed) or "Anyone who uses
+    this computer". It adds OpenPub to the Start menu and to Settings > Apps,
+    opens .opub projects on double-click, and adds OpenPub to "Open with" for
+    .pub files. Your default program for .pub files is not changed.
+    Uninstall from Settings > Apps; it asks whether to keep your settings and
+    personal dictionary (kept unless you say otherwise).
+    Silent install, e.g. for IT departments:
+      OpenPub-<version>-win64-setup.exe /S /currentuser    (for one user)
+      OpenPub-<version>-win64-setup.exe /S /allusers       (all users, as administrator)
+    Silent uninstall: "Uninstall OpenPub.exe" /S in the install folder; add
+    --delete-app-data to remove settings too.
+
+  Portable folder (OpenPub-<version>-win64.zip)
+    Unzip and double-click OpenPub.exe. Nothing is installed; keep the folder
+    together (the .exe needs the files beside it). You can move the whole
+    folder anywhere and pin OpenPub.exe to the taskbar.
 
   Windows SmartScreen may warn the first time because the app is not signed.
   Choose "More info" > "Run anyway".
 
 OPEN .PUB FILES BY DOUBLE-CLICK
-  Right-click a .pub file > Open with > Choose another app > "Choose an app on
-  your PC" > select OpenPub.exe > tick "Always". The same works for .opub
-  project files.
+  Right-click a .pub file > Open with > Choose another app > OpenPub (portable
+  version: "Choose an app on your PC" > select OpenPub.exe) > tick "Always".
+  If OpenPub is already open, the file opens in that window; you are asked
+  first if the open document has unsaved changes.
 
 WHAT IT SAVES
   .pub files are imported and never changed. Your work is saved as an .opub

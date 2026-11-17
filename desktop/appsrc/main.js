@@ -9,6 +9,7 @@ const { pureBlackToGray } = require('./pdfblack');
 
 let win = null;
 let pendingFile = null;   // file passed on the command line before the window was ready
+let pageAsked = false;    // the page has asked for pendingFile, so it is listening for "file:opened"
 let closing = false;
 let lastDir = null;
 const knownPaths = new Set(); // files the user picked in a dialog or opened; only these may be overwritten without asking
@@ -30,6 +31,10 @@ function startDir() {
   try { return app.getPath('documents'); } catch (e) { return os.homedir(); }
 }
 
+// the same ID as the installer's Start menu shortcut, so Windows groups the window with it on the taskbar
+if (process.platform === 'win32') app.setAppUserModelId('org.openpub.desktop');
+
+// One window. A file double-clicked while OpenPub is open goes to that window, which asks about unsaved changes.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -38,15 +43,17 @@ if (!app.requestSingleInstanceLock()) {
     if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
-      if (f) win.webContents.send('file:opened', readDoc(f));
     }
+    if (!f) return;
+    if (win && pageAsked) win.webContents.send('file:opened', readDoc(f));
+    else { pendingFile = f; knownPaths.add(f); } // still starting: the page asks for it once it is ready
   });
   app.whenReady().then(start);
 }
 app.on('window-all-closed', () => app.quit());
 
 function start() {
-  pendingFile = fileFromArgv(process.argv);
+  pendingFile = fileFromArgv(process.argv) || pendingFile;
   if (pendingFile) knownPaths.add(pendingFile);
   const ses = session.defaultSession;
   // the font list ("Add installed fonts") needs this permission; nothing else is granted
@@ -104,7 +111,7 @@ function start() {
 }
 
 // ---------------------------------------------------------------- files
-ipcMain.handle('file:initial', () => { const f = pendingFile; pendingFile = null; return f ? readDoc(f) : null; });
+ipcMain.handle('file:initial', () => { pageAsked = true; const f = pendingFile; pendingFile = null; return f ? readDoc(f) : null; });
 ipcMain.handle('file:open', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Open', defaultPath: startDir(), properties: ['openFile'],
     filters: [{ name: 'Publisher files and OpenPub projects', extensions: ['pub', 'opub'] }, { name: 'Publisher files', extensions: ['pub'] }, { name: 'OpenPub projects', extensions: ['opub', 'json'] }, { name: 'All files', extensions: ['*'] }] });

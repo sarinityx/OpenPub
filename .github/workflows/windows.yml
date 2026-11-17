@@ -17,7 +17,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       # make the desktop tests fail, not skip, if an inspection tool is missing
       OPENPUB_REQUIRE_ALL: '1'
@@ -101,6 +101,24 @@ jobs:
 
       - name: Parser run over the sample files
         run: npm run test:parser
+
+      - name: Package (folder, zip and installer)
+        run: npm run package:win
+
+      # installs silently per user and per machine, opens files through the associations, uninstalls
+      - name: Installer tests
+        run: npm run test:installer
+
+      # Kept for 3 days: the installer is about 100 MB and private repositories on GitHub Free
+      # have 500 MB of Actions storage.
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenPub-installer
+          path: desktop/dist/OpenPub-*-win64-setup.exe
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
 
       - name: Upload test output
         if: always()
