@@ -152,6 +152,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         if (again) A.beginEdit(again, false, null, { r: r2, c: c2 });
       } else if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '\t'); }
     });
+    ed.addEventListener('input', growWhileEditing);
     ed.addEventListener('keyup', A.refreshTextControls);
     ed.addEventListener('pointerup', function () { setTimeout(A.refreshTextControls, 0); });
     ed.addEventListener('wheel', function (e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
@@ -269,6 +270,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     close();
     if (!paras.length) paras.push(OP.newPara([OP.newRun('', styleOf(ed))]));
     return paras;
+  }
+
+  /** "Grow box to fit": resize the box as the text is typed, not only when editing ends. */
+  function growWhileEditing() {
+    var t = target();
+    if (!t || t.cell || !t.it.text || t.it.text.fit !== 'grow') return;
+    if (OP.growToFit(S.doc, t.it, { paras: readEditor() })) { A.positionEditor(); A.invalidate(); A.status(); }
   }
 
   /** Leave text editing, writing the text back to the item. */

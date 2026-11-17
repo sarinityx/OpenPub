@@ -178,7 +178,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (!out.paras.length) out.paras = [OP.newPara()];
     out.valign = t.valign || 'top';
     if (Array.isArray(t.pad) && t.pad.length === 4) out.pad = t.pad.map(function (v) { return +v || 0; });
-    out.fit = t.fit === 'shrink' ? 'shrink' : 'none';
+    out.fit = t.fit === 'shrink' || t.fit === 'grow' ? t.fit : 'none';
     if (t.hyph) out.hyph = true;
     if (+t.cols > 1) { out.cols = Math.min(8, Math.round(+t.cols)); out.gap = isFinite(+t.gap) ? +t.gap : 12; }
     return out;
