@@ -25,6 +25,79 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     insert([OP.newTextBox(c.x, c.y, w, hh, [OP.newPara([OP.newRun(text, st)])])]);
   }
 
+  // ---------------------------------------------------------------- font picker
+  // A drop-down that always lists every font (the browser's own datalist only shows names that
+  // match what is already in the box). Typing narrows the list; each name is shown in its own font.
+  var fp = null;
+  var SYMBOL_FONT = /wingdings|webdings|symbol|marlett|mt extra|mdl2|fluent icons|emoji|bookshelf|dingbat|math/i;
+  function closeFontPop() {
+    if (!fp) return;
+    fp.input.setAttribute('aria-expanded', 'false');
+    fp.pop.remove(); fp = null;
+  }
+  A.fontNames = function () { return Array.prototype.map.call($('fontlist').options, function (o) { return o.value; }); };
+  A.fontPicker = function (input) {
+    input.classList.add('fontfield');
+    input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('aria-expanded', 'false'); input.setAttribute('autocomplete', 'off');
+    function setIdx(i, centre) {
+      if (!fp) return;
+      var kids = fp.pop.querySelectorAll('.fontopt');
+      if (fp.idx >= 0 && kids[fp.idx]) kids[fp.idx].classList.remove('on');
+      fp.idx = Math.max(-1, Math.min(kids.length - 1, i));
+      if (fp.idx >= 0 && kids[fp.idx]) { kids[fp.idx].classList.add('on'); kids[fp.idx].scrollIntoView({ block: centre ? 'center' : 'nearest' }); }
+    }
+    function pick(name) {
+      input.value = name; input.dataset.cur = name;
+      closeFontPop();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function open(filter) {
+      closeFontPop();
+      var all = A.fontNames(), q = (filter || '').toLowerCase();
+      var list = q ? all.filter(function (n) { return n.toLowerCase().indexOf(q) >= 0; }) : all;
+      if (q) list.sort(function (a, b) { return (a.toLowerCase().indexOf(q) === 0 ? 0 : 1) - (b.toLowerCase().indexOf(q) === 0 ? 0 : 1) || a.localeCompare(b); });
+      var pop = h('div', { class: 'fontpop', role: 'listbox', 'aria-label': 'Fonts' });
+      list.forEach(function (n) {
+        var opt = h('div', { class: 'fontopt', role: 'option', title: n, text: n });
+        if (!SYMBOL_FONT.test(n)) opt.style.fontFamily = OP.fontStack(n);
+        opt.addEventListener('mousedown', function (e) { e.preventDefault(); pick(n); });
+        pop.appendChild(opt);
+      });
+      if (!list.length) pop.appendChild(h('div', { class: 'fontnone', text: 'No installed font has that name. Press Enter to use it as typed.' }));
+      else if (!q) pop.insertBefore(h('div', { class: 'fontnone', text: all.length + ' fonts. Type to narrow the list.' }), pop.firstChild);
+      var r = input.getBoundingClientRect(), below = window.innerHeight - r.bottom - 10, above = r.top - 10, up = below < 180 && above > below;
+      pop.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 276)) + 'px';
+      pop.style.maxHeight = Math.max(120, Math.min(420, up ? above : below)) + 'px';
+      if (up) pop.style.bottom = (window.innerHeight - r.top + 3) + 'px'; else pop.style.top = (r.bottom + 3) + 'px';
+      document.body.appendChild(pop);
+      fp = { input: input, pop: pop, list: list, idx: -1 };
+      input.setAttribute('aria-expanded', 'true');
+      var cur = list.indexOf(input.dataset.cur || input.value);
+      if (!q && cur >= 0) setIdx(cur, true); else if (q && list.length) setIdx(0, false);
+    }
+    input.addEventListener('focus', function () { input.dataset.cur = input.value; open(''); });
+    input.addEventListener('mousedown', function () { if (document.activeElement === input && !fp) open(''); });
+    input.addEventListener('input', function () { open(input.value.trim()); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!fp) open(''); else setIdx(fp.idx + (e.key === 'ArrowDown' ? 1 : -1), false);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (fp && fp.idx >= 0) pick(fp.list[fp.idx]);
+        else if (input.value.trim()) pick(input.value.trim());
+      } else if (e.key === 'Escape') {
+        e.stopPropagation();
+        input.value = input.dataset.cur || input.value;
+        closeFontPop(); input.blur();
+      }
+    });
+    input.addEventListener('blur', function () { setTimeout(closeFontPop, 0); });
+  };
+  document.addEventListener('mousedown', function (e) { if (fp && e.target !== fp.input && !fp.pop.contains(e.target)) closeFontPop(); }, true);
+  window.addEventListener('resize', closeFontPop);
+  document.addEventListener('scroll', function (e) { if (fp && e.target !== fp.pop) closeFontPop(); }, true);
+
   // ---------------------------------------------------------------- every text in the document
   /** Calls fn(textObject, where) for each text box, table cell and master text. where = {page, item, master}. */
   function eachText(fn) {
@@ -113,8 +186,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     ta.addEventListener('input', function () { wa.text = ta.value; A.invalidate(); });
     ta.addEventListener('change', function () { wa.text = ta.value; ui.live(true); });
     ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
-    var font = h('input', { type: 'text', id: 'waFont', list: 'fontlist', 'aria-label': 'WordArt font', spellcheck: 'false' });
+    var font = h('input', { type: 'text', id: 'waFont', 'aria-label': 'WordArt font', spellcheck: 'false' });
     font.value = wa.font;
+    A.fontPicker(font);
     font.addEventListener('change', function () { if (font.value.trim()) { wa.font = font.value.trim(); ui.live(true); A.updateFontList(); } });
     font.addEventListener('focus', function () { font.select(); });
     root.appendChild(ui.sec('WordArt', [

@@ -1,0 +1,7 @@
+# Same line endings on Windows and Linux, so the built file and the spelling dictionary are identical everywhere.
+* text=auto eol=lf
+*.pub binary
+*.png binary
+*.icc binary
+*.dic text eol=lf
+*.aff text eol=lf

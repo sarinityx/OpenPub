@@ -1,15 +1,14 @@
 // End-to-end test of the built single-file app in headless Chrome.
 const fs = require('fs'), path = require('path');
-const { chromium } = require('/opt/npm-tools/node_modules/playwright');
-const APP = 'file://' + path.join(__dirname, '..', 'app', 'dist', 'OpenPub.html');
-const PUBS = path.join(__dirname, '..', 'ref', 'poi', 'test-data', 'publisher');
-const OUT = path.join(__dirname, '..', 'e2e-out');
-fs.mkdirSync(OUT, { recursive: true });
+const lib = require('./lib');
+const APP = lib.fileUrl(lib.WEB_APP);
+const PUBS = lib.PUBS;
+const OUT = lib.outDir('web');
 let failures = 0;
 function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) failures++; }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+  const browser = await lib.launchChrome();
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
   const page = await ctx.newPage();
   const errors = [];

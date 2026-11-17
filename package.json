@@ -1,0 +1,25 @@
+{
+  "name": "openpub-workspace",
+  "version": "1.1.1",
+  "private": true,
+  "description": "OpenPub: a desktop page-layout editor that opens Microsoft Publisher (.pub) files",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "postinstall": "npm install --prefix desktop/appsrc --no-audit --no-fund",
+    "build": "node tools/build.js",
+    "start": "node tools/build.js && electron desktop/appsrc",
+    "test": "node tools/build.js && node tools/e2e.js && node tools/e2e-desktop.js",
+    "test:web": "node tools/build.js && node tools/e2e.js",
+    "test:desktop": "node tools/build.js && node tools/e2e-desktop.js",
+    "test:parser": "node tools/harness.js",
+    "smoke": "node tools/build.js && node tools/smoke.js",
+    "package:win": "node tools/package.mjs win32",
+    "package:linux": "node tools/package.mjs linux"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "45.3.0",
+    "playwright-core": "^1.63.0"
+  }
+}
