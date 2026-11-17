@@ -92,6 +92,32 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   /** The item whose text an item shows (itself, or the first box of its story). */
   OP.storyHead = function (doc, it) { var s = OP.storyOf(doc, it); return s ? s.head : it; };
 
+  /** Can this box use "Grow box to fit"? Text boxes only: not WordArt, not in a linked chain, not in columns. */
+  OP.canGrow = function (doc, it) {
+    return !!(it && it.type === 'shape' && it.text && !it.wa && !(it.text.cols > 1) && !it.next && !(doc && OP.storyOf(doc, it)));
+  };
+  /**
+   * "Grow box to fit": make the box exactly as tall as its text, growing or shrinking downward from
+   * its top edge. The width never changes. text overrides the box's own text (used while editing).
+   * @returns {boolean} true if the height changed
+   */
+  OP.growToFit = function (doc, it, text) {
+    if (!it || !it.text || it.text.fit !== 'grow' || !OP.canGrow(doc, it)) return false;
+    var probe = text ? { w: it.w, text: { pad: it.text.pad, hyph: it.text.hyph, paras: text.paras } } : it;
+    var h = OP.round(OP.textHeight(probe), 2);
+    if (!(h > 0) || Math.abs(h - it.h) < 0.01) return false;
+    it.h = h;
+    return true;
+  };
+  /** Apply "Grow box to fit" to every box in the document that uses it. */
+  OP.growAll = function (doc) {
+    var changed = false;
+    (doc.pages || []).concat(doc.masters || []).forEach(function (pg) {
+      (pg.items || []).forEach(function (it) { if (it.text && it.text.fit === 'grow' && OP.growToFit(doc, it)) changed = true; });
+    });
+    return changed;
+  };
+
   // ---------------------------------------------------------------- frames
   function boxFrames(b) {
     var tx = b.text || {}, pad = tx.pad || [3, 3, 3, 3];
