@@ -112,6 +112,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   }
   /** Record the current state as an undo step (no-op if nothing changed). */
   A.commit = function () {
+    if (S.doc && OP.growAll) OP.growAll(S.doc); // "Grow box to fit" boxes follow their text
     var cur = snapshot();
     if (cur === S.last) return false;
     S.undo.push(S.last);
