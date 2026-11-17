@@ -92,8 +92,34 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var defs = Object.keys(used).map(function (k) { return '<image id="' + used[k] + '" width="1" height="1" preserveAspectRatio="none" href="' + doc.assets[k].src + '"/>'; }).join('');
     var wmm = OP.round(w / MM, 3), hmm = OP.round(hh / MM, 3);
     return { wMm: wmm, hMm: hmm, html: '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + OP.escXml(doc.name) + '</title><style>@page{size:' + wmm + 'mm ' + hmm + 'mm;margin:0}' +
-      'html,body{margin:0;padding:0;background:#fff}.s{width:' + wmm + 'mm;height:' + hmm + 'mm;overflow:hidden;page-break-after:always;break-after:page}.s:last-child{page-break-after:auto;break-after:auto}svg{display:block}</style></head><body>' +
+      (OP.fontAliasCss ? OP.fontAliasCss() : '') + 'html,body{margin:0;padding:0;background:#fff}.s{width:' + wmm + 'mm;height:' + hmm + 'mm;overflow:hidden;page-break-after:always;break-after:page}.s:last-child{page-break-after:auto;break-after:auto}svg{display:block}</style></head><body>' +
       (defs ? '<svg width="0" height="0" style="position:absolute"><defs>' + defs + '</defs></svg>' : '') + pages.join('') + '</body></html>' };
+  };
+  /** Draw one sheet at k pixels per point on a white background; marks = also draw crop marks (the PDF writer adds its own). */
+  function drawSheet(ctx, doc, sh, k, marks) {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, Math.ceil(sh.w * k), Math.ceil(sh.h * k));
+    sh.items.forEach(function (it) {
+      var page = doc.pages[it.page], b = it.bleed || 0, s = k * it.scale;
+      ctx.save();
+      ctx.setTransform(s, 0, 0, s, (it.x + b * it.scale) * k, (it.y + b * it.scale) * k);
+      ctx.beginPath(); ctx.rect(-b, -b, doc.w + 2 * b, doc.h + 2 * b); ctx.clip();
+      OP.renderPage(ctx, doc, page, { bleed: b, pxPerPt: s, env: OP.pageEnv(doc, page, it.rec) });
+      ctx.restore();
+    });
+    if (marks && sh.lines.length) {
+      ctx.save(); ctx.setTransform(k, 0, 0, k, 0, 0);
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = Math.max(0.3, 1 / k);
+      ctx.beginPath(); sh.lines.forEach(function (l) { ctx.moveTo(l[0], l[1]); ctx.lineTo(l[2], l[3]); }); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  /** A preview of one sheet that fits maxW × maxH pixels (device pixels follow the screen's density). */
+  OP.sheetPreview = function (doc, sh, maxW, maxH) {
+    var dpr = window.devicePixelRatio || 1, k = Math.min(maxW / sh.w, maxH / sh.h), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(sh.w * k * dpr)); c.height = Math.max(1, Math.round(sh.h * k * dpr));
+    c.style.width = Math.round(sh.w * k) + 'px'; // height follows the width (CSS height: auto)
+    drawSheet(c.getContext('2d'), doc, sh, k * dpr, true);
+    return c;
   };
   /** Picture PDF of sheets (used in the browser, and for n-up / booklet when vector output is not wanted). */
   OP.sheetsRasterPdf = async function (doc, sheets, dpi, onProgress) {
@@ -103,16 +129,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var sh = sheets[i], k = Math.min(dpi, OP.maxDpiFor(Math.max(sh.w, sh.h)), Math.sqrt(100e6 / (sh.w * sh.h)) * 72) / 72;
       var c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(sh.w * k)); c.height = Math.max(1, Math.round(sh.h * k));
-      var ctx = c.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
-      sh.items.forEach(function (it) {
-        var page = doc.pages[it.page], b = it.bleed || 0, s = k * it.scale;
-        ctx.save();
-        ctx.setTransform(s, 0, 0, s, (it.x + b * it.scale) * k, (it.y + b * it.scale) * k);
-        ctx.beginPath(); ctx.rect(-b, -b, doc.w + 2 * b, doc.h + 2 * b); ctx.clip();
-        OP.renderPage(ctx, doc, page, { bleed: b, pxPerPt: s, env: OP.pageEnv(doc, page, it.rec) });
-        ctx.restore();
-      });
+      drawSheet(c.getContext('2d'), doc, sh, k, false);
       var blob = await new Promise(function (res, rej) { c.toBlob(function (bl) { if (bl) res(bl); else rej(new Error('The sheet is too large to render at this resolution.')); }, 'image/jpeg', 0.92); });
       var bytes = new Uint8Array(await blob.arrayBuffer());
       pdf.addPage({ mw: sh.w, mh: sh.h, images: [{ bytes: bytes, pw: c.width, ph: c.height, x: 0, y: 0, w: sh.w, h: sh.h }], lines: sh.lines });
@@ -144,7 +161,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var d = S.doc, mg = d.merge, desk = !!(OP.desktop && OP.desktop.vectorPdf), many = d.pages.length > 1;
     if (mode === 'merge' && !mg) { A.dlgMerge(); return; }
     var info = h('p', { class: 'hint' }), bar = h('i'), prog = h('div', { class: 'progress', hidden: true }, [bar]);
+    // preview of the sheets exactly as they go to the printer or into the PDF
+    var pvAt = 0, pvSheets = [], pvBox = h('div', { class: 'shpv-sheet', id: 'shPreview' }), pvLabel = h('span', { id: 'shPvLabel' });
+    var pvPrev = ui.btn('‹', function () { pvAt--; drawPreview(); }), pvNext = ui.btn('›', function () { pvAt++; drawPreview(); });
+    pvPrev.setAttribute('aria-label', 'Previous sheet'); pvNext.setAttribute('aria-label', 'Next sheet');
+    var preview = h('div', { class: 'shpv' }, [pvBox, h('div', { class: 'shpv-nav' }, [pvPrev, pvLabel, pvNext])]);
     var body = [
+      preview,
       rowL('Layout', [sel('shLay', 'one', [['one', 'One page per sheet'], ['nup', 'Several copies per sheet (cards, labels, flyers)'], ['book', 'Booklet (two pages per sheet, folded)']])], 'shLay'),
       many ? rowL('Pages', [sel('shPages', 'all', [['all', 'All ' + d.pages.length + ' pages'], ['cur', 'Current page (' + (S.pi + 1) + ')']])], 'shPages') : null,
       mg ? rowL('Mail merge', [sel('shRec', mode === 'merge' ? 'all' : 'none', [['none', 'No merge (fields as typed)'], ['cur', 'Record ' + (mg.at + 1) + ' only'], ['all', 'All ' + mg.rows.length + ' records']])], 'shRec') : null,
@@ -222,7 +245,25 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       info.textContent = msg;
       $('shGo').disabled = !ok || (out === 'cmyk' && lay !== 'one') || (out === 'vcmyk' && !(gs && gs.found));
       if ($('shPrint')) $('shPrint').disabled = !ok;
+      pvSheets = ok ? build() : [];
+      drawPreview();
     }
+    var pvTimer = 0;
+    function drawPreview() {
+      clearTimeout(pvTimer);
+      pvTimer = setTimeout(function () {
+        if (!pvBox.isConnected) return;
+        pvAt = Math.max(0, Math.min(pvAt, pvSheets.length - 1));
+        pvBox.innerHTML = '';
+        if (!pvSheets.length) { pvLabel.textContent = 'Nothing to print with these settings'; pvPrev.disabled = pvNext.disabled = true; return; }
+        pvBox.appendChild(OP.sheetPreview(d, pvSheets[pvAt], 400, 220));
+        var sh = pvSheets[pvAt], lay = $('shLay').value;
+        pvLabel.textContent = 'Sheet ' + (pvAt + 1) + ' of ' + pvSheets.length + ', ' + OP.round(sh.w / MM, 0) + ' × ' + OP.round(sh.h / MM, 0) + ' mm' +
+          (lay === 'book' ? (pvAt % 2 ? ' (back)' : ' (front)') : '');
+        pvPrev.disabled = pvAt === 0; pvNext.disabled = pvAt >= pvSheets.length - 1;
+      }, 60);
+    }
+    OP.ensureImages(d).then(function () { drawPreview(); });
     ['shLay', 'shPages', 'shRec', 'shPaper', 'shMargin', 'shGap', 'shCount', 'shBleed', 'shMarks', 'shOut', 'shDpi'].forEach(function (id) {
       if ($(id)) { $(id).addEventListener('change', update); $(id).addEventListener('input', update); }
     });
