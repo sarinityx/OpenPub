@@ -381,7 +381,7 @@ const sh = lib.sh;
   const vc = path.join(OUT, 'RoundTripSrc-cmyk.pdf');
   ok(isPdf(vc), 'vector CMYK PDF written');
   need(PIKEPDF, 'python3 + pikepdf', 'vector CMYK fill operators', () => {
-  const py = sh("python3 -c \"import pikepdf,re,sys; pdf=pikepdf.open(sys.argv[1]); pg=pdf.pages[0]; cs=pg.Contents if isinstance(pg.Contents, pikepdf.Array) else [pg.Contents]; d=b' '.join(c.read_bytes() for c in cs); print(len(re.findall(rb'[0-9.]\\s+rg\\s',d)), len(re.findall(rb'[0-9.]\\s+k\\s',d)), len(re.findall(rb'[\\s]0 g\\s',d)))\" '" + vc + "'").trim();
+  const py = sh("python3 -c \"import pikepdf,re,sys; pdf=pikepdf.open(sys.argv[1]); pg=pdf.pages[0]; cs=pg.Contents if isinstance(pg.Contents, pikepdf.Array) else [pg.Contents]; d=b' '.join(c.read_bytes() for c in cs); print(len(re.findall(rb'[0-9.]\\s+rg\\s',d)), len(re.findall(rb'[0-9.]\\s+k\\s',d)), len(re.findall(rb'[\\s]0 g\\s',d)))\" \"" + vc + "\"").trim();
   const [nrg, nk, ng] = py.split(' ').map(Number);
   ok(nrg === 0 && nk > 0 && ng > 0, 'vector CMYK PDF: ' + nrg + ' RGB fills, ' + nk + ' CMYK fills, ' + ng + ' black-plate-only fills');
   });
