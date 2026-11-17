@@ -399,6 +399,51 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   });
   ok(wrapM.without < 1 && wrapM.pushed >= 3, 'an object on the master page pushes page text aside: ' + wrapM.pushed + ' lines start past it');
 
+  // ---- text wrap while typing: the canvas shows the wrapped text, OpenPub places the caret
+  const we = await page.evaluate(() => {
+    const A = OP.app, d = OP.newDoc(), pg = d.pages[0];
+    const words = 'Typing beside the square keeps the text wrapped on both sides while the box is edited. ';
+    const box = OP.newTextBox(40, 60, 400, 300, [OP.newPara([OP.newRun(words.repeat(8), { size: 12, font: 'Arial' })])]);
+    const ob = OP.newShape('rect', 190, 120, 100, 100); ob.fill = { type: 'solid', color: '#3d7ea6' }; ob.wrap = { mode: 'square', dist: 6 };
+    pg.items.push(box, ob);
+    A.loadDoc(d); A.setSel([box.id]); A.beginEdit(box);
+    return { id: box.id, obR: ob.x + ob.w + 6 - box.x, pad: box.text.pad[0] };
+  });
+  await page.waitForSelector('#ted.wrapedit');
+  ok(await page.evaluate(() => OP.app.isWrapEditing()), 'editing a box with text wrap switches to live wrap (editor text hidden, canvas draws it)');
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type(' Typed while editing.');
+  await page.waitForTimeout(150);
+  const live = await page.evaluate((w) => {
+    const d = OP.app.S.doc, box = OP.app.find(w.id), lay = OP.textCols(d, box, null).cols[0].lay, rows = {};
+    lay.lines.forEach(l => { (rows[l.y.toFixed(2)] = rows[l.y.toFixed(2)] || []).push(l); });
+    return { text: OP.plainText(box.text), both: Object.values(rows).filter(r => r.length === 2).length };
+  }, we);
+  ok(/Typed while editing\.$/.test(live.text) && live.both >= 3, 'typing writes through and the live layout keeps text on both sides: ' + live.both + ' rows');
+  // click a little into the first right-hand line of the first row beside the square
+  const target = await page.evaluate((w) => {
+    const A = OP.app, box = A.find(w.id), tc = OP.textCols(A.S.doc, box, null), col = tc.cols[0], rows = {};
+    col.lay.lines.forEach(l => { (rows[l.y.toFixed(2)] = rows[l.y.toFixed(2)] || []).push(l); });
+    const row = Object.values(rows).find(r => r.length === 2), right = row[1], mk = right.marks[0];
+    const bx = col.x + mk.x + 3, by = col.y + right.y + right.h / 2, s = A.toScreen(box.x + bx, box.y + by), r = document.getElementById('ov').getBoundingClientRect();
+    return { x: r.left + s.x, y: r.top + s.y, rowY: col.y + right.y };
+  }, we);
+  await page.mouse.click(target.x, target.y);
+  const c1 = await page.evaluate(() => OP.app.wrapEditState());
+  ok(c1 && c1.x >= we.obR - 0.5 && Math.abs(c1.y - target.rowY) < 0.01, 'a click beside the square puts the caret on the right-hand line (x ' + (c1 && c1.x.toFixed(1)) + ' pt)');
+  await page.keyboard.press('ArrowDown');
+  const c2 = await page.evaluate(() => OP.app.wrapEditState());
+  ok(c2 && c2.y > c1.y && c2.x >= we.obR - 0.5, 'Down moves to the next row and stays on the right of the square (y ' + c1.y.toFixed(1) + ' -> ' + (c2 && c2.y.toFixed(1)) + ')');
+  await page.keyboard.type('X');
+  await page.waitForTimeout(100);
+  const typedAt = await page.evaluate((w) => OP.app.find(w.id).text.paras[0].runs.map(r => r.t).join('').indexOf('X'), we);
+  ok(typedAt === c2.off, 'a character typed there lands at that place in the text (offset ' + typedAt + ')');
+  await page.keyboard.press('Escape');
+  const ended = await page.evaluate((w) => ({ on: OP.app.isWrapEditing(), has: !!document.querySelector('#ted'), text: OP.plainText(OP.app.find(w.id).text) }), we);
+  await page.click('#tbUndo');
+  const weUndone = await page.evaluate((w) => OP.plainText(OP.app.find(w.id).text), we);
+  ok(!ended.on && !ended.has && /X/.test(ended.text) && !/Typed while editing|X/.test(weUndone), 'Esc keeps the text; one undo reverts the whole edit');
+
   // ---- design checker (Review › Check design)
   const seeded = await page.evaluate(() => {
     const A = OP.app, d = OP.newDoc(), pg = d.pages[0], st = { size: 12, font: 'Arial' };

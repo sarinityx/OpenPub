@@ -280,7 +280,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       OP.reindex(S.doc); ui.live(true); A.refreshPanels();
     }, 'How nearby text treats this object')], 'wrMode')];
     if (w) rows.push(ui.row('Distance', [ui.num('wrDist', OP.round(w.dist / MM, 1), { unit: 'mm', min: 0, max: 50, step: 0.5, dec: 1, aria: 'Wrap distance' }, function (v, f) { it.wrap.dist = v * MM; ui.live(f); })], 'wrDist'));
-    if (w) rows.push(h('p', { class: 'hint', text: 'Text in overlapping text boxes on this page flows around this object, on both sides; a side narrower than 13 mm stays empty. On a master page, it pushes aside the text of every page that uses the master. While you type in a box the wrap is hidden; it returns when you finish.' }));
+    if (w) rows.push(h('p', { class: 'hint', text: 'Text in overlapping text boxes on this page flows around this object, on both sides; a side narrower than 13 mm stays empty. On a master page, it pushes aside the text of every page that uses the master. The wrap stays in place while you type.' }));
     root.appendChild(ui.sec('Text wrap', rows));
   }
 
