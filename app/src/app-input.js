@@ -105,6 +105,11 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       return;
     }
     var it = A.hitTest(p);
+    if (S.painter) { // format painter: the click applies the copied formatting, or cancels on empty page
+      if (it) { A.pasteFormat([it]); A.setSel([it.id]); if (!S.painter.sticky) A.stopPainter(); }
+      else { A.stopPainter(); A.setSel([]); }
+      return;
+    }
     if (S.linkFrom) { // choosing the box a story continues into
       var from = A.find(S.linkFrom) || OP.docIndex(S.doc).map[S.linkFrom];
       S.linkFrom = null; ov.style.cursor = '';
@@ -310,6 +315,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   function hoverCursor(s, p) {
     var ov = $('ov'), cur = '';
     if (spaceDown) cur = 'grab';
+    else if (S.painter) cur = 'copy';
     else if (S.tool === 'text') cur = 'text';
     else if (S.tool !== 'select') cur = 'crosshair';
     else {
@@ -476,6 +482,88 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     });
     return out;
   }
+  // ---------------------------------------------------------------- format painter
+  var RUN_KEYS = ['font', 'size', 'b', 'i', 'u', 's', 'caps', 'sp', 'color'];
+  var PARA_KEYS = ['align', 'ls', 'lsPt', 'before', 'after', 'indent', 'left', 'right', 'bullet', 'num'];
+  function pick(o, keys) { var r = {}; keys.forEach(function (k) { if (o[k] !== undefined) r[k] = OP.clone(o[k]); }); return r; }
+  function hasText(it) { return !!(it && it.type === 'shape' && it.text && !it.wa); }
+  /** What the painter copies from an item: object look, and its text's first character and paragraph formatting.
+   *  While editing, the text formatting comes from the caret instead. */
+  function formatOf(it) {
+    var f = { obj: {}, run: null, para: null };
+    if (it.type !== 'table') {
+      if (it.type === 'shape' && !OP.isOpen(it)) f.obj.fill = OP.clone(it.fill || null);
+      if (it.type === 'shape' || it.type === 'image') f.obj.stroke = OP.clone(it.stroke || null);
+      f.obj.shadow = OP.clone(it.shadow || null);
+      f.obj.opacity = it.opacity === undefined ? 1 : it.opacity;
+      if (it.kind === 'roundrect' && it.radius !== undefined) f.obj.radius = it.radius;
+    }
+    if (S.editing === it.id && A.isEditing() && hasText(it)) {
+      var st = A.textState();
+      f.run = pick(st, RUN_KEYS);
+      f.para = pick(st, PARA_KEYS);
+      f.para.bullet = st.bullet ? '•' : null; f.para.num = !!st.num;
+    } else if (hasText(it)) {
+      var p0 = it.text.paras[0], r0 = p0.runs.filter(function (r) { return r.t; })[0] || p0.runs[0];
+      f.run = pick(r0, RUN_KEYS);
+      f.para = pick(p0, PARA_KEYS);
+    }
+    return f;
+  }
+  function applyFormat(it, f) {
+    if (it.locked) return false;
+    var o = f.obj;
+    if (it.type !== 'table') {
+      if ('fill' in o && it.type === 'shape' && !OP.isOpen(it) && !it.wa) it.fill = OP.clone(o.fill);
+      if ('stroke' in o && (it.type === 'shape' || it.type === 'image')) it.stroke = OP.clone(o.stroke);
+      if ('shadow' in o) it.shadow = OP.clone(o.shadow);
+      if ('opacity' in o) it.opacity = o.opacity;
+      if ('radius' in o && it.kind === 'roundrect') it.radius = o.radius;
+    }
+    if (f.run && hasText(it)) {
+      it.text.paras.forEach(function (p) {
+        PARA_KEYS.forEach(function (k) {
+          if (k === 'num') { if (f.para.num) p.num = true; else delete p.num; }
+          else if (k === 'bullet') p.bullet = f.para.num ? null : (f.para.bullet || null);
+          else if (f.para[k] !== undefined) p[k] = OP.clone(f.para[k]);
+        });
+        p.runs.forEach(function (r) {
+          RUN_KEYS.forEach(function (k) { if (f.run[k] === undefined || f.run[k] === false) delete r[k]; else r[k] = OP.clone(f.run[k]); });
+        });
+      });
+    }
+    return true;
+  }
+  /** Copy the formatting of the selected object (or of the text at the caret). */
+  A.copyFormat = function (quiet) {
+    var src = S.editing ? A.find(S.editing) : A.selItems()[0];
+    if (!src || src.type === 'table') { A.toast('Select a text box, shape or picture to copy its formatting.'); return false; }
+    S.fmt = formatOf(src);
+    if (!quiet) A.toast('Formatting copied. Select objects and press Ctrl+Shift+V to apply it.');
+    return true;
+  };
+  /** Apply copied formatting to the given items (default: the selection). One undo step. */
+  A.pasteFormat = function (items) {
+    if (!S.fmt) { A.toast('Nothing copied yet. Select an object and press Ctrl+Shift+C first.'); return; }
+    if (S.editing) A.endEdit();
+    var n = 0;
+    (items || A.selItems()).forEach(function (it) { if (applyFormat(it, S.fmt)) n++; });
+    if (!n) return;
+    A.commit(); A.refreshAll(); A.updateFontList();
+  };
+  /** Arm the painter: copy from the selection, then the next click on an object applies it.
+   *  sticky: keep applying on every click until Esc. */
+  A.startPainter = function (sticky) {
+    if (!A.copyFormat(true)) return;
+    if (S.editing) A.endEdit();
+    if (S.tool !== 'select') A.setTool('select');
+    S.painter = { sticky: !!sticky };
+    $('ov').style.cursor = 'copy';
+    A.toast(sticky ? 'Format painter on: click objects to apply. Press Esc to stop.' : 'Click an object to apply the formatting. Press Esc to cancel.');
+    A.refreshToolbar();
+  };
+  A.stopPainter = function () { S.painter = null; $('ov').style.cursor = ''; A.refreshToolbar(); };
+
   /** The units align and distribute would move: unlocked selected objects, a group counting as one. */
   A.alignUnits = function () { return units(); };
   A.align = function (how) {
@@ -583,11 +671,17 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (mod && k === 's') { e.preventDefault(); A.saveProject(); return; }
     if (mod && k === 'o') { e.preventDefault(); $('fileOpen').click(); return; }
     if (A.modalOpen()) { if (e.key === 'Escape') A.closeModal(); return; }
+    if (mod && e.shiftKey && (k === 'c' || k === 'v') && (S.editing || !typing(e))) { // format painter shortcuts (also while editing text)
+      e.preventDefault();
+      if (k === 'c') A.copyFormat(); else A.pasteFormat();
+      return;
+    }
     if (S.editing) {
       if (e.key === 'Escape') { e.preventDefault(); A.endEdit(); }
       return;
     }
     if (typing(e)) return;
+    if (e.key === 'Escape' && S.painter) { A.stopPainter(); A.toast('Format painter off.'); return; }
     if (e.key === ' ') { spaceDown = true; if (!S.drag) $('ov').style.cursor = 'grab'; e.preventDefault(); return; }
     if (mod) {
       if (k === 'z') { e.preventDefault(); if (e.shiftKey) A.redo(); else A.undo(); }
