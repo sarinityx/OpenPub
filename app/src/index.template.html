@@ -217,6 +217,11 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .dlg td { padding: 3px 8px 3px 0; vertical-align: top; }
 .dlg td:first-child { white-space: nowrap; }
 .progress { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.shpv { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; border-radius: 6px; background: var(--panel-2); }
+.shpv-sheet { min-height: 120px; display: flex; align-items: center; justify-content: center; }
+.shpv-sheet canvas { display: block; max-width: 100%; height: auto; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.shpv-nav { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
+.shpv-nav .btn { min-width: 30px; }
 .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
 #toasts { position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 120; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
 .toast { background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 7px; box-shadow: 0 8px 22px var(--shadow); max-width: min(560px, 90vw); }
