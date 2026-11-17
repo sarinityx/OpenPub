@@ -8,6 +8,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   // ---------------------------------------------------------------- modal dialogs
   var modalBusy = false, modalOnClose = null;
   A.modalOpen = function () { return $('modal').classList.contains('open'); };
+  A.modalBusy = function () { return modalBusy; };
   A.closeModal = function (force) {
     if (modalBusy && !force) return;
     var m = $('modal'), fn = modalOnClose;
@@ -176,6 +177,13 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 
   A.openFile = function (file) {
     A.guardUnsaved(function () { openNow(file); });
+  };
+  /** A file handed over by Windows while OpenPub is open (double-click, "Open with"). An export or print that is
+   *  running finishes first; any other dialog is closed. Unsaved work is asked about as usual. */
+  A.openFromSystem = function (file) {
+    if (modalBusy) { A.status('Opening ' + file.name + ' when the current task finishes…'); setTimeout(function () { A.openFromSystem(file); }, 300); return; }
+    A.closeModal(true);
+    A.openFile(file);
   };
   async function openNow(file) {
     A.status('Opening ' + file.name + '…');
@@ -476,7 +484,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         e.preventDefault();
         OP.desktop.openDialog().then(function (f) { if (f && f.bytes) A.openFile(f); });
       });
-      OP.desktop.onOpenFile(function (f) { if (f && f.bytes) { A.closeModal(true); A.openFile(f); } });
+      OP.desktop.onOpenFile(function (f) { if (f && f.bytes) A.openFromSystem(f); });
       document.body.classList.add('desktop');
     }
     $('btnExport').addEventListener('click', function () { A.dlgExport(); });
