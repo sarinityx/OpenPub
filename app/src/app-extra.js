@@ -197,7 +197,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         { txt: 'B', title: 'Bold', on: wa.b, fn: function () { wa.b = !wa.b; ui.live(true); A.refreshPanels(); } },
         { txt: '<i>I</i>', title: 'Italic', on: wa.i, fn: function () { wa.i = !wa.i; ui.live(true); A.refreshPanels(); } }])]),
       ui.row('Shape', [ui.select('waWarp', wa.warp, OP.WARPS, function (v) { wa.warp = v; ui.live(true); }, 'WordArt shape')], 'waWarp'),
-      h('p', { class: 'hint', text: 'The text stretches to fill its frame. Colour, gradient, outline and shadow are set under Fill and outline.' })
+      ui.row('Lines', [ui.select('waAlign', wa.align || 'stretch', OP.WA_ALIGNS, function (v) { wa.align = v; ui.live(true); }, 'Line alignment')], 'waAlign'),
+      h('p', { class: 'hint', text: 'The text stretches to fill its frame. With several lines, Centre, Left and Right keep the letters the same width on every line. Colour, gradient, outline and shadow are set under Fill and outline.' })
     ]));
   }
 

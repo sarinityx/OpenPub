@@ -492,6 +492,94 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   ok(clean[0] === 0 && clean[1] === 'No problems found.', 'a clean document reports none: ' + clean[1]);
   await page.evaluate(() => { OP.app.showTab('props'); OP.app.S.dirty = false; });
 
+  // ---- import fidelity (1.2 item 8). Real-world certificate files stay private (test-data/private), so the
+  // findings from them are checked here on SampleNewsletter.pub and on small hand-built parser results.
+  const nl = await page.evaluate(async (b64) => {
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const r = OP.pubToDoc(await OP.parsePub(u), 'nl');
+    const items = {}, paras = [];
+    r.doc.pages.forEach((p, pi) => p.items.forEach(it => { items[it.id] = { it, pi }; if (it.text) it.text.paras.forEach(pa => paras.push(pa)); }));
+    const all = Object.values(items), heads = all.filter(o => o.it.next && !all.some(q => q.it.next === o.it.id));
+    const chains = heads.map(h => { const c = []; for (let o = h; o; o = o.it.next ? items[o.it.next] : null) c.push(o); return c; });
+    return {
+      maxIndent: Math.max(...paras.map(p => Math.abs(p.left))), negLeft: paras.filter(p => p.left < 0).map(p => p.left),
+      chains: chains.length, ordered: chains.every(c => c.every((o, i) => i === 0 || (o.pi === c[0].pi && o.it.x > c[i - 1].it.x))),
+      headsHoldText: chains.every(c => OP.plainText(c[0].it.text).length > 0 && c.slice(1).every(o => !OP.plainText(o.it.text).length)),
+      notes: r.notes
+    };
+  }, fs.readFileSync(path.join(PUBS, 'SampleNewsletter.pub')).toString('base64'));
+  ok(nl.maxIndent < 100 && nl.negLeft.length === 1 && Math.abs(nl.negLeft[0] + 10.8) < 0.1, 'negative left indent read as signed (' + nl.negLeft.join(', ') + ' pt, largest ' + nl.maxIndent + ' pt)');
+  ok(nl.chains === 10 && nl.ordered && nl.headsHoldText && !nl.notes.some(n => /wrong order/.test(n)), 'linked boxes chained in the order the file gives (' + nl.chains + ' chains)');
+  const fid = await page.evaluate(() => {
+    const I = OP.pubInternals, EMU = 12700;
+    const out = {};
+    const a = I.anchorOf({ 0x2001: 100 * EMU, 0x2003: 300 * EMU }), none = I.anchorOf({});
+    out.anchor = !!a && a.ys === 0 && a.ye === 0 && a.xs === 100 * EMU && none === null;
+    // a minimal parser result: page 1 on master 2
+    function utf16(s) { const b = []; for (const ch of s) { const c = ch.charCodeAt(0); b.push(c & 255, c >> 8); } return new Uint8Array(b); }
+    function shape(seq, type, box, v, t, c) { return { seq, type, flags: 0xa00, abs: { xs: box[0] * EMU, ys: box[1] * EMU, xe: (box[0] + box[2]) * EMU, ye: (box[1] + box[3]) * EMU }, fopt: { v: v || {}, c: c || {} }, tert: { v: t || {}, c: {} } }; }
+    const pub = {
+      warnings: [], widthEmu: 400 * EMU, heightEmu: 300 * EMU, palette: [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 102 }, { r: 153, g: 153, b: 51 }], images: [], fonts: ['Arial'], textColors: [], defaultChar: [{}], defaultPara: [{}],
+      stories: { 5: { id: 5, paras: [{ runs: [{ text: 'Linked story\r', style: {} }], style: {} }] } },
+      shapes: {
+        10: { seq: 10, chunkType: 1, textId: null, borderArt: 2 }, 11: { seq: 11, chunkType: 1, textId: null, borderArt: 1 },
+        12: { seq: 12, chunkType: 0x20, textId: null }, 13: { seq: 13, chunkType: 1, textId: null }, 14: { seq: 14, chunkType: 1, textId: null },
+        15: { seq: 15, chunkType: 1, textId: 5, chainIndex: 1, prevBox: 16 }, 16: { seq: 16, chunkType: 1, textId: 5, nextBox: 15 }
+      },
+      pages: { 1: { seq: 1, shapes: [10, 11, 12, 14, 15, 16], bgShape: null, isMaster: false, master: 2, dummy: false }, 2: { seq: 2, shapes: [13], bgShape: null, isMaster: true, master: null, dummy: false } },
+      pageOrder: [1],
+      drawn: [
+        { shape: shape(10, 1, [-180, -130, 360, 260], { 0x1C0: 0xffffff, 0x1CB: 36 * EMU, 0x1FF: 0xf000e }, { 0x540: 0xff9966, 0x54B: 36 * EMU }) },
+        { shape: shape(11, 1, [-150, -100, 300, 200], { 0x1C0: 0xffffff, 0x1CB: 6 * EMU, 0x1FF: 0xf000e }, { 0x540: 0x08000002, 0x54B: 6 * EMU }) },
+        { shape: shape(12, 136, [-100, -80, 200, 60], { 0xC3: 18 << 16 }, null, { 0xC0C0: utf16('Certificate\r\nof\r\nCompletion'), 0xC0C5: utf16('Arial') }) },
+        { shape: shape(13, 1, [-50, 20, 100, 20], { 0x181: 0x0000ff, 0x1BF: 0x100010 }) },
+        { shape: shape(14, 1, [-50, 20, 100, 20], { 0x181: 0x0000ff, 0x1BF: 0x100010 }) },
+        { shape: shape(15, 1, [60, 40, 80, 40]) },
+        { shape: shape(16, 1, [-140, 40, 80, 40]) }
+      ]
+    };
+    const r = OP.pubToDoc(pub, 'synthetic'), pg = r.doc.pages[0], byName = (n) => pg.items.filter(it => it.name === n);
+    const ba = byName('BorderArt (plain frame)');
+    out.borderArt = ba.map(it => [it.stroke.color, it.stroke.width, OP.round(it.x, 1), OP.round(it.w, 1)]);
+    out.baNote = r.notes.some(n => /BorderArt/.test(n));
+    const wa = pg.items.find(it => it.wa);
+    out.waAlign = wa && wa.wa.align;
+    const g = OP.wordArtGlyphs(wa).glyphs, o = g.find(q => q.ch === 'o' && q.m[4] > wa.w * 0.3);
+    out.sameWidth = g.every(q => Math.abs(q.m[0] - g[0].m[0]) < 1e-9);
+    out.ofCentred = !!o && o.m[4] > wa.w * 0.35 && o.m[4] < wa.w * 0.55;
+    const stretched = OP.wordArtGlyphs(Object.assign({}, wa, { id: wa.id + 's', wa: Object.assign({}, wa.wa, { align: 'stretch' }) })).glyphs;
+    out.stretchDiffers = stretched.some(q => Math.abs(q.m[0] - stretched[0].m[0]) > 1e-6);
+    out.dupes = pg.items.filter(it => it.fill && it.fill.color === '#ff0000').length + '+' + r.doc.masters[0].items.length;
+    const boxes = pg.items.filter(it => it.text), left = boxes.find(it => it.x < 100), right = boxes.find(it => it.x > 200);
+    out.chain = OP.plainText(left.text) === 'Linked story' && left.next === right.id && !OP.plainText(right.text) && !right.next;
+    // older documents keep stretched lines; new WordArt is centred
+    out.oldDoc = OP.normaliseDoc({ pages: [{ items: [{ type: 'shape', kind: 'rect', x: 0, y: 0, w: 10, h: 10, wa: { text: 'a\nbb' } }] }] }).pages[0].items[0].wa.align;
+    out.newWa = OP.newWordArt('x', 0, 0, 10, 10).wa.align;
+    return out;
+  });
+  ok(fid.anchor, 'a missing anchor coordinate is read as 0 (shapes on the page centre line are kept)');
+  ok(JSON.stringify(fid.borderArt) === JSON.stringify([['#6699ff', 36, 38, 324], ['#000000', 6, 53, 294]]) && fid.baNote,
+    'BorderArt becomes a plain frame inside its edge, in its own colour (scheme colour: black): ' + JSON.stringify(fid.borderArt));
+  ok(fid.waAlign === 'center' && fid.sameWidth && fid.ofCentred && fid.stretchDiffers, 'multi-line WordArt: centred, same letter width on every line (' + fid.waAlign + ')');
+  ok(fid.dupes === '0+1', 'a page object that repeats a master object exactly is imported once (' + fid.dupes + ')');
+  ok(fid.chain, 'linked boxes follow next-box links, not file order');
+  ok(fid.oldDoc === 'stretch' && fid.newWa === 'center', 'WordArt alignment: older documents keep stretched lines, new WordArt is centred');
+  const thin = await page.evaluate(() => {
+    // a 0.25 pt rule at 1 px per point is drawn at least one pixel wide, so it stays dark instead of fading to grey
+    const d = OP.newDoc(200, 100), ln = OP.newShape('line', 20, 50.5, 160, 0);
+    ln.stroke = { color: '#000000', width: 0.25, dash: 'solid' }; d.pages[0].items.push(ln);
+    const c = OP.pageToCanvas(d, d.pages[0], 1), px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let darkest = 255; for (let i = 0; i < px.length; i += 4) darkest = Math.min(darkest, px[i]);
+    const svg = OP.pageToSvg(d, d.pages[0]);
+    return { darkest, svgWidth: (svg.match(/stroke-width="([\d.]+)"/) || [])[1] };
+  });
+  ok(thin.darkest < 60 && thin.svgWidth === '0.25', 'a 0.25 pt rule shows dark on screen (darkest ' + thin.darkest + ') and keeps 0.25 pt in vector output');
+  await page.evaluate(() => { const A = OP.app, d = OP.newDoc(); const w = OP.newWordArt('Certificate\nof\nCompletion', 40, 40, 300, 120); d.pages[0].items.push(w); A.loadDoc(d); A.setSel([w.id]); A.refreshPanels(); });
+  await page.selectOption('#waAlign', 'left');
+  ok(await page.evaluate(() => OP.app.selItems()[0].wa.align === 'left'), 'WordArt panel: Lines sets the alignment');
+  await page.evaluate(() => { OP.app.S.dirty = false; });
+
   // ---- a bad file gives a readable error, not a crash
   await page.evaluate(() => { OP.app.S.dirty = false; });
   const [c4] = await Promise.all([page.waitForEvent('filechooser'), page.click('#btnOpen')]);
