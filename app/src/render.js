@@ -220,7 +220,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (st && st.width > 0) {
       if (sh && (it.type === 'shape' && !it.fill)) shadowOn();
       ctx.strokeStyle = st.color;
-      ctx.lineWidth = st.width;
+      // at least one device pixel, as Publisher shows hairlines (0.25 pt rules would otherwise fade to grey);
+      // vector output (SVG, PDF) keeps the real width
+      ctx.lineWidth = Math.max(st.width, 1 / k);
       ctx.lineJoin = 'miter'; ctx.miterLimit = 8;
       ctx.setLineDash(OP.dashArray(st));
       ctx.stroke(path);

@@ -159,8 +159,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         case 0x12: st.before = b.data / EMU_PER_PT; break;
         case 0x13: st.after = b.data / EMU_PER_PT; break;
         case 0x0C: st.indent = (b.data | 0) / EMU_PER_PT; break;
-        case 0x0D: st.left = b.data / EMU_PER_PT; break;
-        case 0x0E: st.right = b.data / EMU_PER_PT; break;
+        // indents are signed: a negative left indent pulls text into the box's margin
+        case 0x0D: st.left = (b.data | 0) / EMU_PER_PT; break;
+        case 0x0E: st.right = (b.data | 0) / EMU_PER_PT; break;
         case 0x57: st.list = true; break;
       }
     });
@@ -382,11 +383,16 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           out.pages[c.seq] = pg;
         } else if (c.type === CHUNK_SHAPE || c.type === CHUNK_ALTSHAPE || c.type === CHUNK_GROUP ||
                    c.type === CHUNK_LOGO || c.type === CHUNK_TABLE) {
-          var sh = { seq: c.seq, chunkType: c.type, parent: c.parent, textId: null, valign: null, table: null };
+          var sh = { seq: c.seq, chunkType: c.type, parent: c.parent, textId: null, valign: null, table: null, borderArt: 0 };
           var rowcol = null, cellsSeq = null;
           chunkBody(c, function (b) {
             if (b.id === 0x27) sh.textId = b.data;
             else if (b.id === 0x35) sh.valign = b.data;
+            else if (b.id === 0x09 && b.type === 0x18 && c.type === CHUNK_SHAPE) sh.borderArt = b.data; // Publisher's BorderArt pattern number
+            // linked text boxes: place in the chain, previous and next box (shape seq)
+            else if (b.id === 0x28 && b.type === 0x20) sh.chainIndex = b.data;
+            else if (b.id === 0x36 && b.type === 0x68) sh.prevBox = b.data;
+            else if (b.id === 0x37 && b.type === 0x68) sh.nextBox = b.data;
             else if (c.type === CHUNK_TABLE) {
               if (b.id === 0x6B) cellsSeq = b.data;
               else if (b.id === 0x66) { sh.table = sh.table || {}; sh.table.rows = b.data; }
@@ -497,6 +503,15 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     return o;
   }
 
+  /**
+   * Page position from a client anchor's (id, value) pairs, in EMU from the page centre. Publisher leaves out a
+   * coordinate that is zero (on the centre line of the page), so a missing one is 0; with none at all there is no position.
+   */
+  function anchorOf(an) {
+    if (an[0x2001] === undefined && an[0x2002] === undefined && an[0x2003] === undefined && an[0x2004] === undefined) return null;
+    return { xs: an[0x2001] | 0, ys: an[0x2002] | 0, xe: an[0x2003] | 0, ye: an[0x2004] | 0 };
+  }
+
   function parseEscher(bytes, out, warn) {
     var r = new Reader(bytes);
     var top = escherTree(r, 0, r.n, 0);
@@ -534,9 +549,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       s.fopt = readFopt(r, kid(sp, E_FOPT));
       s.tert = readFopt(r, kid(sp, E_TERTIARY));
       var ca = kid(sp, E_CLIENT_ANCHOR), ch = kid(sp, E_CHILD_ANCHOR);
-      if (ca && ca.len >= 28) {
-        var an = readPairs(r, ca);
-        s.abs = { xs: an[0x2001] | 0, ys: an[0x2002] | 0, xe: an[0x2003] | 0, ye: an[0x2004] | 0 };
+      var anchor = ca ? anchorOf(readPairs(r, ca)) : null;
+      if (anchor) {
+        s.abs = anchor;
       } else if (ch && ch.len >= 16 && parentSys && parentAbs) {
         r.p = ch.off;
         var cw = (parentSys.xe - parentSys.xs) || 1, chh = (parentSys.ye - parentSys.ys) || 1;
@@ -717,5 +732,5 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 
   OP.Reader = Reader;
   OP.parsePub = parsePub;
-  OP.pubInternals = { resolveColor: resolveColor, toHex: toHex, EMU_PER_PT: EMU_PER_PT };
+  OP.pubInternals = { resolveColor: resolveColor, toHex: toHex, EMU_PER_PT: EMU_PER_PT, anchorOf: anchorOf };
 })();
