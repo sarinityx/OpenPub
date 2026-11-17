@@ -424,6 +424,8 @@ const sh = lib.sh;
   const res = await Promise.race([closed.then(() => 'closed'), new Promise(r => setTimeout(() => r('timeout'), 8000))]);
   ok(res === 'closed', 'window closes after the unsaved-changes prompt');
   if (res !== 'closed') await app.evaluate(({ app }) => app.exit(0));
+  // CI sets OPENPUB_REQUIRE_ALL so that a missing inspection tool fails the run instead of skipping quietly
+  if (skipped && process.env.OPENPUB_REQUIRE_ALL) ok(false, skipped + ' group(s) skipped, but OPENPUB_REQUIRE_ALL is set');
   console.log((failures ? failures + ' FAILED' : 'ALL PASSED') + (skipped ? ', ' + skipped + ' group(s) skipped' : ''));
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error('TEST CRASH', e.message.split('\n').slice(0, 12).join('\n')); process.exit(2); });
