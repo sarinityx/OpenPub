@@ -399,14 +399,17 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (!out.length) out = Array.prototype.filter.call(ed.children, function (d) { return d.tagName === 'DIV' || d.tagName === 'P'; });
     return out;
   }
-  /** Apply paragraph formatting ({align, ls, after, bullet}). */
+  // Paragraph spacing and indents, all in points: copied as given.
+  var PARA_NUMS = ['before', 'after', 'indent', 'left', 'right'];
+  /** Apply paragraph formatting ({align, ls, lsPt, before, after, indent, left, right, bullet, num}). ls (a multiple) clears lsPt (exact points). */
   A.applyParaStyle = function (patch, final) {
     if (ed) {
       editorParas().forEach(function (div) {
         var a = paraAttrs({});
         try { if (div.dataset.p) a = JSON.parse(div.dataset.p); } catch (e) { /* defaults */ }
         if ('ls' in patch) { a.ls = patch.ls; a.lsPt = null; }
-        if ('after' in patch) a.after = patch.after;
+        if ('lsPt' in patch) a.lsPt = patch.lsPt;
+        PARA_NUMS.forEach(function (k) { if (k in patch) a[k] = patch[k]; });
         if ('bullet' in patch) { a.bullet = patch.bullet === 'toggle' ? (a.bullet ? null : '•') : patch.bullet; if (a.bullet) a.num = false; }
         if ('num' in patch) { a.num = patch.num === 'toggle' ? !a.num : !!patch.num; if (a.num) a.bullet = null; }
         styleDiv(div, a, patch.align || div.style.textAlign || 'left');
@@ -418,7 +421,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       tx.paras.forEach(function (p) {
         if (patch.align) p.align = patch.align;
         if ('ls' in patch) { p.ls = patch.ls; p.lsPt = null; }
-        if ('after' in patch) p.after = patch.after;
+        if ('lsPt' in patch) p.lsPt = patch.lsPt;
+        PARA_NUMS.forEach(function (k) { if (k in patch) p[k] = patch[k]; });
         if ('bullet' in patch) { p.bullet = patch.bullet === 'toggle' ? (on ? null : '•') : patch.bullet; if (p.bullet) delete p.num; }
         if ('num' in patch) { if (patch.num === 'toggle' ? !non : patch.num) { p.num = true; p.bullet = null; } else delete p.num; }
       });
@@ -438,13 +442,15 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var a = paraAttrs({});
       try { if (div && div.dataset && div.dataset.p) a = JSON.parse(div.dataset.p); } catch (e) { /* defaults */ }
       st.align = (div && div.style && div.style.textAlign) || 'left';
-      st.ls = a.ls; st.after = a.after; st.bullet = !!a.bullet && !a.num; st.num = !!a.num;
+      st.ls = a.ls; st.lsPt = a.lsPt || null; st.bullet = !!a.bullet && !a.num; st.num = !!a.num;
+      PARA_NUMS.forEach(function (k) { st[k] = a[k] || 0; });
       return st;
     }
     var tx = A.textTargets()[0];
     if (!tx) return null;
     var p = tx.paras[0], r = p.runs[0];
-    return { font: r.font, size: r.size, b: r.b, i: r.i, u: r.u, s: !!r.s, caps: !!r.caps, sp: r.sp || 0, color: r.color, align: p.align, ls: p.ls, after: p.after, bullet: !!p.bullet && !p.num, num: !!p.num };
+    return { font: r.font, size: r.size, b: r.b, i: r.i, u: r.u, s: !!r.s, caps: !!r.caps, sp: r.sp || 0, color: r.color, align: p.align, ls: p.ls, lsPt: p.lsPt || null,
+      before: p.before || 0, after: p.after || 0, indent: p.indent || 0, left: p.left || 0, right: p.right || 0, bullet: !!p.bullet && !p.num, num: !!p.num };
   };
   A.isEditing = function () { return !!ed; };
   A.setEditorBox = function (it) {
