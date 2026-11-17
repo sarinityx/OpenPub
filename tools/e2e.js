@@ -361,6 +361,44 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.waitForFunction(() => OP.app.S.doc.name === 'Newsletter, two pages' || OP.app.S.doc.pages.length === 2);
   ok(await page.evaluate(() => { const d = OP.app.S.doc, a = d.pages[0].items.find(i => i.next); const s = OP.storyOf(d, a); return d.pages.length === 2 && s && s.chain.length === 3 && OP.textCols(d, s.chain[2], null).cols.length === 2; }), 'newsletter template: story linked through 3 boxes over 2 pages, last box in 2 columns');
 
+  // ---- text wrap: both sides of an obstacle, narrow sides skipped, master-page obstacles
+  const wrapT = await page.evaluate(() => {
+    const A = OP.app, d = OP.newDoc(), pg = d.pages[0];
+    const words = 'Text flows around the square on both of its sides and reads left before right on each row. ';
+    const box = OP.newTextBox(40, 60, 400, 300, [OP.newPara([OP.newRun(words.repeat(8), { size: 12, font: 'Arial' })])]);
+    const ob = OP.newShape('rect', 190, 120, 100, 100); ob.fill = { type: 'solid', color: '#3d7ea6' }; ob.wrap = { mode: 'square', dist: 6 };
+    pg.items.push(box, ob);
+    A.loadDoc(d);
+    const tc = OP.textCols(d, box, OP.pageEnv(d, pg)), col = tc.cols[0], pad = box.text.pad[0];
+    const obL = ob.x - box.x - pad - 6, obR = ob.x + ob.w - box.x - pad + 6; // obstacle edges in column space, with the wrap distance
+    const rows = {};
+    col.lay.lines.forEach((l, i) => { (rows[l.y.toFixed(2)] = rows[l.y.toFixed(2)] || []).push({ i, x: l.x, r: l.x + l.width, n: l.segs.length }); });
+    const both = Object.values(rows).filter(r => r.length === 2 && r[0].r <= obL + 0.5 && r[1].x >= obR - 0.5 && r[0].i < r[1].i);
+    const svg = OP.pageToSvg(d, pg), xs = [...svg.matchAll(/<text x="([-\d.]+)"/g)].map(m => +m[1]);
+    // narrow side: move the obstacle so only 30 pt is left on its left
+    ob.x = box.x + pad + 30 + 6; A.commit();
+    const tc2 = OP.textCols(d, box, OP.pageEnv(d, pg)), obTop = ob.y - box.y - box.text.pad[1], obBot = obTop + ob.h;
+    const leftOfNarrow = tc2.cols[0].lay.lines.filter(l => l.y + l.h > obTop && l.y < obBot && l.x < 30).length;
+    return { both: both.length, rightSvg: xs.filter(x => x >= col.x + obR - 0.5).length, leftOfNarrow, min: OP.WRAP_MIN_SIDE };
+  });
+  ok(wrapT.both >= 3, 'text flows on both sides of an obstacle: ' + wrapT.both + ' rows with a line left and a line right, left first');
+  ok(wrapT.rightSvg >= 3, 'SVG export places the right-hand lines beyond the obstacle too (' + wrapT.rightSvg + ' words)');
+  ok(wrapT.leftOfNarrow === 0, 'a side narrower than ' + wrapT.min + ' pt is left empty');
+  const wrapM = await page.evaluate(() => {
+    const A = OP.app, d = OP.newDoc(), pg = d.pages[0], m = OP.newPage();
+    m.name = 'Master A'; d.masters.push(m);
+    const ob = OP.newShape('rect', 40, 100, 160, 120); ob.wrap = { mode: 'square', dist: 6 }; m.items.push(ob);
+    const box = OP.newTextBox(40, 60, 400, 300, [OP.newPara([OP.newRun('Page text pushed aside by an object on the master page. '.repeat(10), { size: 12, font: 'Arial' })])]);
+    pg.items.push(box);
+    A.loadDoc(d);
+    const xs = () => OP.textCols(d, box, OP.pageEnv(d, pg)).cols[0].lay.lines.map(l => l.x);
+    const without = Math.max(...xs());
+    pg.master = m.id; A.commit();
+    const withM = xs();
+    return { without, pushed: withM.filter(x => x >= 160 - 1).length };
+  });
+  ok(wrapM.without < 1 && wrapM.pushed >= 3, 'an object on the master page pushes page text aside: ' + wrapM.pushed + ' lines start past it');
+
   // ---- design checker (Review › Check design)
   const seeded = await page.evaluate(() => {
     const A = OP.app, d = OP.newDoc(), pg = d.pages[0], st = { size: 12, font: 'Arial' };
