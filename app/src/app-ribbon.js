@@ -52,6 +52,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     rBlocks: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><path d="M17 14v6M14 17h6"/>',
     rTrash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
     rUngroup: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+    rCheck: '<path d="M6 3h8l4 4v6"/><path d="M6 3v18h6"/><path d="M14 3v4h4"/><path d="M14 18l2.5 2.5L21 15"/>',
     rPainter: '<rect x="4" y="3" width="14" height="6" rx="1"/><path d="M18 6h2v5h-8v3"/><rect x="10.5" y="14" width="3" height="7" rx="1"/>'
   });
 
@@ -176,7 +177,9 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       { id: 'review', label: 'Review', groups: [
         { title: 'Proofing', items: [
           { id: 'rbSpell', icon: 'rSpell', label: 'Spelling', lg: true, tip: 'Check spelling with the Australian English dictionary (F7)', fn: function () { A.dlgSpell(); } },
-          { id: 'rbFind', icon: 'rFind', label: 'Find and replace', lg: true, tip: 'Ctrl+F', fn: function () { A.dlgFind(); } }] }] },
+          { id: 'rbFind', icon: 'rFind', label: 'Find and replace', lg: true, tip: 'Ctrl+F', fn: function () { A.dlgFind(); } }] },
+        { title: 'Design', items: [
+          { id: 'rbCheck', icon: 'rCheck', label: 'Check design', lg: true, tip: 'Find text that does not fit, low-resolution pictures, objects off the page and more before you print', fn: function () { A.checkDesign(); } }] }] },
       { id: 'view', label: 'View', groups: [
         { title: 'Zoom', items: [
           { id: 'rbFit', icon: 'fit', label: 'Fit page', lg: true, tip: 'Ctrl+0', fn: function () { A.fit(); A.zoomLabel(); } },

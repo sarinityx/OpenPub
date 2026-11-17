@@ -9,15 +9,15 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Install (also installs `desktop/appsrc` dependencies) | `npm install` |
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
-| Browser tests (67 checks, needs Google Chrome) | `npm run test:web` |
-| Desktop tests (76 checks) | `npm run test:desktop` |
+| Browser tests (74 checks, needs Google Chrome) | `npm run test:web` |
+| Desktop tests (77 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
 | Package Windows build + zip into `desktop/dist` | `npm run package:win` |
 
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
-- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 76 checks, 0 skipped.
+- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 77 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
 - The font drop-down checks need the Liberation fonts installed (they type "liberation s" and pick Liberation Serif).
 - Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
@@ -38,7 +38,8 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 ## Architecture rules
 
 - Module order is fixed in `tools/build.js` (`ORDER`). A new module must be added there.
-  `util, cfb, model, geometry, wmf, emf, layout, hyph, flow, wrap, table, wordart, pub, pubconv, render, export, app-core, app-input, app-text, app-panels, app-extra, app-print, app-ribbon, app-plugins, app-main`
+  `util, cfb, model, geometry, wmf, emf, layout, hyph, flow, wrap, table, wordart, pub, pubconv, render, export, app-core, app-input, app-text, app-panels, app-extra, app-print, app-ribbon, app-plugins, app-main, app-check`
+  `app-check` comes last because it wraps the export and print dialogs defined in `app-main`.
 - A new item type or item field must be handled in four places: model normalisation (`normItem` / `normText` in `model.js`), canvas renderer (`render.js`), SVG exporter (`OP.pageToSvg` in `export.js`) and the undo snapshot (`app-core.js`). Missing one gives a feature that draws but does not export, or is lost on undo or reload.
 - Geometry is in points everywhere. The UI shows millimetres (`OP.MM`).
 - The editor must keep working as a plain web page: guard desktop-only features with `if (OP.desktop)`.

@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const SRC = path.join(__dirname, '..', 'app', 'src'), DIST = path.join(__dirname, '..', 'app', 'dist');
 const ORDER = ['util', 'cfb', 'model', 'geometry', 'wmf', 'emf', 'layout', 'hyph', 'flow', 'wrap', 'table', 'wordart', 'pub', 'pubconv', 'render', 'export',
-  'app-core', 'app-input', 'app-text', 'app-panels', 'app-extra', 'app-print', 'app-ribbon', 'app-plugins', 'app-main'];
+  'app-core', 'app-input', 'app-text', 'app-panels', 'app-extra', 'app-print', 'app-ribbon', 'app-plugins', 'app-main', 'app-check'];
 const js = ORDER.map(m => {
   const s = fs.readFileSync(path.join(SRC, m + '.js'), 'utf8');
   if (/<\/script/i.test(s)) throw new Error(m + '.js contains </script');
