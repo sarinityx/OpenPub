@@ -9,7 +9,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Install (also installs `desktop/appsrc` dependencies) | `npm install` |
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
-| Browser tests (74 checks, needs Google Chrome) | `npm run test:web` |
+| Browser tests (84 checks, needs Google Chrome) | `npm run test:web` |
 | Desktop tests (77 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
 | Package Windows build + zip into `desktop/dist` | `npm run package:win` |
