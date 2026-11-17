@@ -24,7 +24,7 @@ npm start
 npm run package:win
 ```
 
-Output: `desktop/dist/OpenPub-win32-x64/OpenPub.exe` and `desktop/dist/OpenPub-<version>-win64.zip`. The app is portable (no installer) and unsigned.
+Output in `desktop/dist/`: the portable folder `OpenPub-win32-x64/`, its zip `OpenPub-<version>-win64.zip`, and the installer `OpenPub-<version>-win64-setup.exe` (built on Windows only; per user or per machine, silent with `/S /currentuser` or `/S /allusers`). Nothing is code-signed.
 
 ## Tests
 
@@ -32,6 +32,7 @@ Output: `desktop/dist/OpenPub-win32-x64/OpenPub.exe` and `desktop/dist/OpenPub-<
 npm run test:web        browser build, needs Google Chrome
 npm run test:desktop    desktop app
 npm run test:parser     renders every sample .pub to test-out/parser
+npm run test:installer  Windows: installs, checks and uninstalls the built installer
 ```
 
 On Linux without a display, run the desktop tests under `xvfb-run -a`. Some PDF checks need poppler-utils, Python 3 with pikepdf, and Ghostscript; they are skipped when those are missing.

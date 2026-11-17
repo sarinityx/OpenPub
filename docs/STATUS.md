@@ -13,6 +13,8 @@ Publisher replacement. Windows desktop app (Electron 45, portable folder, `OpenP
 - Format painter (Home › Clipboard, Ctrl+Shift+C / Ctrl+Shift+V): copies text formatting (character and paragraph) and object look (fill, outline, shadow, opacity, corner rounding) onto whole objects. One click applies once; double-click keeps it on until Esc. It applies to a whole text box, not to part of its text.
 - Design checker (Review › Check design, Check tab): text that does not fit (or the last box of a linked chain), pictures below a set resolution (150 ppi by default), objects partly or wholly off the page or outside the bleed, fonts that are not installed (desktop only), empty text boxes, mail-merge fields with no data, and RGB pictures as notes when the output is CMYK. Results are grouped by page; clicking one goes to the object. Export, Print layouts and Tiled poster offer the check when the document has changed since it last ran; it never blocks output.
 - Text wrap on both sides of an obstacle: each row fills the space left of it, then right of it. A side narrower than 36 pt (about 13 mm, `OP.WRAP_MIN_SIDE`) stays empty. Wrap objects on a master page push aside the text of every page that uses that master. The wrap stays visible while typing: in a box that wraps, the canvas draws the text and OpenPub draws the caret and selection; clicks, drags, double-click, Up/Down and Home/End follow the wrapped lines. Spelling underlines are off in such a box while typing.
+- Windows installer (`OpenPub-<version>-win64-setup.exe`, electron-builder 26.18 NSIS), beside the portable zip. One installer: "Only for me" (no administrator rights) or "Anyone who uses this computer"; silent with `/S /currentuser` or `/S /allusers`. Start menu shortcut (no desktop shortcut), uninstall entry in Settings > Apps. `.opub` opens in OpenPub with its own document icon; for `.pub` OpenPub is added to "Open with" and Settings > Default apps, and the existing default program (usually Publisher) is left alone. Uninstalling asks whether to remove settings and the personal dictionary (default: keep); silent uninstalls keep them unless `--delete-app-data` is passed. `OpenPub.exe` has its own icon and version details.
+- A file double-clicked while OpenPub is open goes to the open window, which asks about unsaved changes first (Cancel keeps the open document). An export or print that is running finishes before the file opens. A file double-clicked while OpenPub is still starting opens once it is ready.
 
 ### 1.1.1
 - Font drop-down lists every installed font, each shown in its own typeface, with type-to-filter. (The earlier list only showed fonts matching the text already in the box.)
@@ -35,16 +37,18 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 77 desktop end-to-end checks (Electron, clean profile per run), 84 browser checks, parser run over the sample files: all pass on Linux and on Windows 11 as of this version.
+- 81 desktop end-to-end checks (Electron, clean profile per run), 84 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
+- Installer (`npm run test:installer`, Windows): silent install per user and per machine, files, version details, Start menu shortcut, uninstall entry, registry for `.opub` and `.pub`, the `.pub` default left unchanged, a `.opub` opened through Windows starts the installed app, the installed app imports a `.pub`, silent uninstall removes everything it added and keeps settings (or removes them with `--delete-app-data`). Per user run on Windows 11; per machine runs on CI.
 - Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
 - Packaged (asar) build smoke-tested on Linux and on Windows (`npm run package:win` run on Windows, including the zip): file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests.
 - CMYK conversion tested with Ghostscript 9.56 code (a WASM build standing in for a system install) and a FOGRA39 profile, and with Ghostscript 10.08 installed on Windows.
 - `npm start` runs the app from source on Windows.
-- CI (`.github/workflows/windows.yml`): web, desktop and parser tests on `windows-latest` for every push to `main` and every pull request, with no desktop checks allowed to skip.
+- CI (`.github/workflows/windows.yml`): web, desktop and parser tests on `windows-latest` for every push to `main` and every pull request, with no desktop checks allowed to skip; then packaging, the installer and the installer test. The installer is uploaded as an artifact (kept 3 days).
 
 ## Not tested
 
 - Printing to a real printer, and the Windows print dialog.
+- The installer's own pages (install mode, the keep-settings question on uninstall) by hand; the tests drive it silently.
 - Import of master-page objects, multi-column boxes and EMF pictures from real files (no sample has them).
 
 ## Known limits
@@ -52,12 +56,13 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 - Cannot save `.pub`. Publisher 98 and 2000 files are rejected.
 - Linked boxes are chained in file order on import. Table import keeps one grid style (per-cell borders are lost). WordArt letters are placed individually, not bent.
 - Script plug-ins generally cannot run in the browser build (content security policy); content packs can.
-- No installer, no file associations, no code signing (Windows SmartScreen warns on first run).
+- No code signing: Windows SmartScreen warns on first run of the installer and of the portable app.
+- A per-machine uninstall removes the settings of the user who runs it (when asked to), not those of other users.
 
 ## Backlog
 
-- Installer, `.pub` / `.opub` file associations, code signing.
+- Code signing.
 - Catalogue merge, design checker, spot colours.
 - Per-cell table borders on import; true bent WordArt glyphs.
-- CI: add packaging (`npm run package:win`) and the packaged smoke test to the Windows workflow; consider a Linux job.
+- CI: add the packaged smoke test to the Windows workflow; consider a Linux job.
 - Font drop-down tests: pick from whatever fonts are installed instead of needing Liberation Serif.

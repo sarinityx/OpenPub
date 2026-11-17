@@ -10,18 +10,20 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
 | Browser tests (84 checks, needs Google Chrome) | `npm run test:web` |
-| Desktop tests (77 checks) | `npm run test:desktop` |
+| Desktop tests (81 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
-| Package Windows build + zip into `desktop/dist` | `npm run package:win` |
+| Package Windows build, zip and installer into `desktop/dist` | `npm run package:win` |
+| Installer test (Windows; installs, checks, uninstalls) | `npm run test:installer` |
 
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
-- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 77 checks, 0 skipped.
+- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 81 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
 - The font drop-down checks need the Liberation fonts installed (they type "liberation s" and pick Liberation Serif).
 - Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
-- CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed. `test-out/` is uploaded as an artifact.
+- CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed, then packages, builds the installer and runs the installer test (per user and per machine). `test-out/` and the installer are uploaded as artifacts.
+- The installer test refuses to run if OpenPub is already installed (it uninstalls as part of the test). Without administrator rights it skips the per-machine half.
 - Always run `npm run build` before testing by hand; the tests load the built file, not `app/src`.
 
 ## Layout
@@ -30,6 +32,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - `app/src/index.template.html` – page shell and all CSS. `tools/build.js` inlines the modules at `/*__SCRIPTS__*/`.
 - `desktop/appsrc/` – Electron shell: `main.js`, `preload.js` (bridge `window.openpubDesktop`, seen by the editor as `OP.desktop`), `pdfblack.js`, `dict/` (en-AU spelling).
 - `desktop/examples/` – sample plug-in, sample content pack, `PLUGINS.md` (plug-in API reference). Shipped with the app.
+- `desktop/build/` – Windows icons (`icon.ico`, `opub.ico`, drawn by `tools/make-icons.js`) and `installer.nsh` (file types and the keep-settings question for the electron-builder NSIS installer).
 - `tools/` – build, packaging and test scripts. `tools/lib.js` holds all paths and launch helpers. `tools/debug/` has parser dump scripts.
 - `test-data/publisher/` – sample `.pub` files from Apache POI.
 - `docs/STATUS.md` – what is built, what is tested, known limits, backlog.
@@ -48,6 +51,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - No `</script` inside any module (the build rejects it).
 - `.pub` is read-only: the format is undocumented, so there is no `.pub` writer. Projects save as `.opub` (JSON).
 - Ghostscript is AGPL: detect and call an installed copy, never bundle it.
+- The app ID `org.openpub.desktop` (in `tools/package.mjs` and `main.js`) must never change: the installer's GUID, upgrades and the taskbar grouping depend on it.
 
 ## Conventions
 

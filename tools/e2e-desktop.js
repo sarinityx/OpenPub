@@ -425,6 +425,30 @@ const sh = lib.sh;
   const rt = await ev(() => { const d = OP.app.S.doc, j = JSON.parse(JSON.stringify(d)), n = OP.normaliseDoc(j); const t = n.pages[1].items.find(i => i.type === 'table'); return t ? OP.plainText(t.cells[2][1].text) : null; });
   ok(rt === 'Bottom Right', 'tables survive save/load normalisation: "' + rt + '"');
 
+  // ---- 17b. a file double-clicked in Windows while OpenPub is open goes to the open window
+  const dlgHead = () => ev(() => { const h = document.querySelector('#modal.open .dlg header'); return h ? h.textContent : ''; });
+  const docBefore = await ev(() => { OP.app.S.dirty = true; return OP.app.S.doc.name; });
+  const code1 = await lib.secondInstance(app.profile, [path.join(PUBS, 'Simple.pub')]);
+  await page.waitForFunction(() => { const h = document.querySelector('#modal.open .dlg header'); return !!h && /Unsaved changes/.test(h.textContent); }, null, { timeout: 20000 }).catch(() => {});
+  ok(code1 === 0 && /Unsaved changes/.test(await dlgHead()), 'second launch with a file exits (' + code1 + ') and the open window asks about unsaved changes');
+  await page.click('.dlg .btn:has-text("Cancel")');
+  ok(await ev((n) => OP.app.S.doc.name === n && OP.app.S.dirty, docBefore), 'Cancel keeps the open document and its changes');
+  await lib.secondInstance(app.profile, [path.join(PUBS, 'Simple.pub')]);
+  await page.waitForFunction(() => { const h = document.querySelector('#modal.open .dlg header'); return !!h && /Unsaved changes/.test(h.textContent); }, null, { timeout: 20000 });
+  await page.click('.dlg .btn:has-text("Discard changes")');
+  await page.waitForFunction(() => { const h = document.querySelector('#modal.open .dlg header'); return !!h && /Imported Simple\.pub/.test(h.textContent); }, null, { timeout: 20000 }).catch(() => {});
+  ok(/Imported Simple\.pub/.test(await dlgHead()), 'Discard changes opens the double-clicked file');
+  await page.click('.dlg .btn.primary');
+  // an export or print that is running is not interrupted: the file opens when it finishes
+  await ev(() => { OP.app.S.dirty = false; window.__busy = OP.app.modal('Working', [], [{ label: 'Close' }]); window.__busy.busy(true); });
+  await lib.secondInstance(app.profile, [path.join(PUBS, 'Sample.pub')]);
+  await page.waitForTimeout(800);
+  const stillBusy = await dlgHead();
+  await ev(() => { window.__busy.busy(false); OP.app.closeModal(); });
+  await page.waitForFunction(() => { const h = document.querySelector('#modal.open .dlg header'); return !!h && /Imported Sample\.pub/.test(h.textContent); }, null, { timeout: 20000 }).catch(() => {});
+  ok(stillBusy === 'Working' && /Imported Sample\.pub/.test(await dlgHead()), 'a running task finishes first, then the file opens (' + stillBusy + ')');
+  await page.click('.dlg .btn.primary');
+
   // ---- 18. unsaved-changes prompt on close ("Don't save" answered by the stub)
   await ev(() => { OP.app.S.dirty = true; });
   ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.slice(0, 5).join(' | ') : ''));
