@@ -51,7 +51,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     rWordArt: '<path d="M4 18c3-9 5-12 8-12s5 3 8 12M7.5 13h9"/>',
     rBlocks: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><path d="M17 14v6M14 17h6"/>',
     rTrash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
-    rUngroup: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>'
+    rUngroup: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+    rPainter: '<rect x="4" y="3" width="14" height="6" rx="1"/><path d="M18 6h2v5h-8v3"/><rect x="10.5" y="14" width="3" height="7" rx="1"/>'
   });
 
   // ---------------------------------------------------------------- theme
@@ -113,7 +114,10 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           { id: 'rbPaste', icon: 'rPaste', label: 'Paste', lg: true, tip: 'Paste (Ctrl+V)', fn: function () { A.paste(); } },
           [{ id: 'rbCut', icon: 'rCut', label: 'Cut', tip: 'Cut (Ctrl+X)', fn: function () { A.cut(); } },
             { id: 'rbCopy', icon: 'copy', label: 'Copy', tip: 'Copy (Ctrl+C)', fn: function () { A.copy(); } },
-            { id: 'rbDup', icon: 'rDup', label: 'Duplicate', tip: 'Duplicate (Ctrl+D)', fn: function () { A.duplicate(); } }]] },
+            { id: 'rbDup', icon: 'rDup', label: 'Duplicate', tip: 'Duplicate (Ctrl+D)', fn: function () { A.duplicate(); } }],
+          { id: 'rbPainter', icon: 'rPainter', label: 'Format painter', lg: true,
+            tip: 'Copy formatting from the selected object, then click another object to apply it. Double-click to keep it on until Esc. Keys: Ctrl+Shift+C to copy, Ctrl+Shift+V to apply',
+            fn: function () { if (S.painter) A.stopPainter(); else A.startPainter(false); }, dbl: function () { A.startPainter(true); } }] },
         { title: 'Tools', items: [
           { id: 'tbSelect', icon: 'cursor', label: 'Select', lg: true, tip: 'Select and move (V)', fn: function () { A.setTool('select'); } },
           { id: 'tbText', icon: 'text', label: 'Text box', lg: true, tip: 'Text box: drag on the page (T)', fn: function () { A.setTool('text'); } },
@@ -199,7 +203,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   var active = readPref('openpub.ribbonTab', 'home');
   function button(d) {
     var b = h('button', { type: 'button', class: 'rb-btn' + (d.lg ? ' lg' : ''), id: d.id, title: d.tip || d.label, 'aria-label': d.aria || d.label,
-      html: A.icon(d.icon) + '<span class="lbl">' + OP.escXml(d.label) + '</span>', onclick: function (e) { A.closeMenus(); d.fn(e); } });
+      html: A.icon(d.icon) + '<span class="lbl">' + OP.escXml(d.label) + '</span>', onclick: function (e) { A.closeMenus(); d.fn(e); },
+      ondblclick: d.dbl ? function (e) { A.closeMenus(); d.dbl(e); } : null });
     return b;
   }
   function shapesButton() {
@@ -306,7 +311,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   var baseRefresh = A.refreshToolbar;
   A.refreshToolbar = function () {
     baseRefresh();
-    var th = A.theme(), map = { rbThSys: th === 'system', rbThLight: th === 'light', rbThDark: th === 'dark', rbMaster: !!S.master };
+    var th = A.theme(), map = { rbThSys: th === 'system', rbThLight: th === 'light', rbThDark: th === 'dark', rbMaster: !!S.master, rbPainter: !!S.painter };
     Object.keys(map).forEach(function (id) { var el = $(id); if (el) { el.classList.toggle('on', map[id]); el.setAttribute('aria-pressed', map[id] ? 'true' : 'false'); } });
     ['tbSelect', 'tbText', 'tbShape', 'tbLine', 'tbSnap', 'tbGuides'].forEach(function (id) { var el = $(id); if (el) el.setAttribute('aria-pressed', el.classList.contains('on') ? 'true' : 'false'); });
   };
