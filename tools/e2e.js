@@ -65,6 +65,58 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   ok(await page.locator('#props .sec').count() >= 3, 'properties panel shows sections');
   await page.screenshot({ path: path.join(OUT, '05-selected.png') });
 
+  // ---- paragraph spacing and indents: imported values show in the panel
+  const OP_MM = 72 / 25.4; // points per millimetre, as OP.MM in the app
+  const hang =await page.evaluate(() => {
+    const A = OP.app, it = A.page().items.find(i => i.text && i.text.paras.some(p => /Jay Adams/.test(p.runs.map(r => r.t).join(''))));
+    A.setSel([it.id]); A.beginEdit(it);
+    const div = Array.from(document.getElementById('ted').children).find(d => /Jay Adams/.test(d.textContent));
+    const r = document.createRange(); r.setStart(div, 0); r.collapse(true);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    A.refreshTextControls(true);
+    const p = it.text.paras.find(p => /Jay Adams/.test(p.runs.map(r => r.t).join('')));
+    return { first: +document.getElementById('tIndF').value, left: +document.getElementById('tIndL').value, model: [p.indent, p.left] };
+  });
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  ok(Math.abs(hang.first - hang.model[0] / OP_MM) < 0.06 && Math.abs(hang.left - hang.model[1] / OP_MM) < 0.06 && hang.first < 0,
+    'imported hanging indent shows in the panel: first line ' + hang.first + ' mm, left ' + hang.left + ' mm');
+
+  // ---- paragraph spacing and indents: set from the panel, check canvas layout, SVG, undo and reload
+  const pid = await page.evaluate(() => {
+    const A = OP.app, st = { size: 12, font: 'Arial' };
+    const it = OP.newTextBox(60, 600, 170, 160, [OP.newPara([OP.newRun('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore', st)]), OP.newPara([OP.newRun('Second paragraph', st)])]);
+    A.page().items.push(it); A.commit(); A.setSel([it.id]);
+    return it.id;
+  });
+  for (const [id, v] of [['#tBefore', '12'], ['#tIndL', '10'], ['#tIndR', '5'], ['#tIndF', '-5']]) { await page.fill(id, v); await page.press(id, 'Tab'); }
+  await page.selectOption('#tLsMode', 'exact');
+  await page.fill('#tLsPt', '18'); await page.press('#tLsPt', 'Tab');
+  const ps = await page.evaluate((id) => {
+    const it = OP.app.find(id), lay = OP.layoutItemText(it), p0 = lay.lines.filter(l => l.pi === 0);
+    const svg = OP.pageToSvg(OP.app.S.doc, OP.app.page()), m = /<text x="([-\d.]+)"[^>]*>Lorem/.exec(svg);
+    return { paras: it.text.paras.map(p => [p.before, p.left, p.right, p.indent, p.lsPt]), x0: p0[0].x, x1: p0[1] && p0[1].x, y0: p0[0].y, h0: p0[0].h,
+      maxW: Math.max.apply(null, p0.map(l => l.width)), iw: lay.innerW, ox: lay.ox, svgX: m ? +m[1] : null };
+  }, pid);
+  const MMv = OP_MM;
+  ok(ps.paras.every(p => p[0] === 12 && Math.abs(p[1] - 10 * MMv) < 0.01 && Math.abs(p[2] - 5 * MMv) < 0.01 && Math.abs(p[3] + 5 * MMv) < 0.01 && p[4] === 18),
+    'panel sets space before, left and right indents, first line and exact line spacing on every paragraph');
+  ok(Math.abs(ps.x0 - 5 * MMv) < 0.05 && Math.abs(ps.x1 - 10 * MMv) < 0.05 && Math.abs(ps.y0 - 12) < 0.05 && ps.h0 === 18 && ps.maxW <= ps.iw - 15 * MMv + 0.5,
+    'canvas layout follows: first line at ' + ps.x0.toFixed(2) + ' pt, next lines at ' + (ps.x1 || 0).toFixed(2) + ' pt, 12 pt before, 18 pt lines');
+  ok(ps.svgX !== null && Math.abs(ps.svgX - (ps.ox + ps.x0)) < 0.05, 'SVG export places the first line at the indented position (x = ' + ps.svgX + ')');
+  await page.click('#tbUndo');
+  const afterUndo = await page.evaluate((id) => OP.app.find(id).text.paras[0].lsPt, pid);
+  await page.click('#tbRedo');
+  const afterRedo = await page.evaluate((id) => OP.app.find(id).text.paras[0].lsPt, pid);
+  // switching to "Exactly" was its own step (1.2 × 12 pt = 14.4 pt), so one undo goes back to that
+  ok(afterUndo === 14.4 && afterRedo === 18, 'undo and redo step one change at a time: 18 -> ' + afterUndo + ' -> ' + afterRedo + ' pt');
+  const reload = await page.evaluate((id) => {
+    const d = OP.normaliseDoc(JSON.parse(JSON.stringify(OP.app.S.doc)));
+    for (const pg of d.pages) for (const it of pg.items) if (it.id === id) return it.text.paras.map(p => [p.before, p.left, p.right, p.indent, p.lsPt]);
+    return null;
+  }, pid);
+  ok(JSON.stringify(reload) === JSON.stringify(ps.paras), 'paragraph spacing and indents survive save and reload');
+  await page.evaluate((id) => { const A = OP.app; A.page().items = A.page().items.filter(i => i.id !== id); A.setSel([]); A.commit(); A.refreshAll(); }, pid);
+
   // ---- add shape + text box with tools
   await page.keyboard.press('Escape');
   await page.keyboard.press('r');
