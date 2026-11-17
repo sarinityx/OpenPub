@@ -51,7 +51,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
 
   /**
    * Lay out paragraphs in a column of the given width.
-   * opt.avail(y, h) -> {x, w} | null gives the free part of the column for a line at y (text wrap);
+   * opt.avail(y, h) -> [{x, w}, …] | null gives the free parts of the column for a line at y, left to
+   * right (text wrap); lines fill them in turn at the same height before moving down;
    * opt.hyph switches on hyphenation.
    * @returns {{lines:Object[], height:number}} lines carry y (top), base (baseline), h and segments.
    */
@@ -91,24 +92,41 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var estH = p.lsPt ? p.lsPt * scale : (fm0.asc + fm0.desc) * (p.ls || 1);
 
       var cur = [], curW = 0, first = true, li = 0, box = null;
+      // Text wrap: a row beside an obstacle can hold several lines side by side (its "slots"),
+      // filled left to right before the text moves down. rowY/rowH: top and height of that row.
+      var slots = null, slotIdx = 0, rowY = 0, rowH = 0;
+      function clip(reg, x, w, need) {
+        var x1 = Math.max(x, reg.x), x2 = Math.min(x + w, reg.x + reg.w);
+        return x2 - x1 >= need ? { x: x1, w: x2 - x1 } : null;
+      }
       /** The horizontal span the current line may use: paragraph margins, minus anything text wraps around. */
       function lineBox() {
         if (box) return box;
         var x = left + (first ? indent : hang), w = avail - (first ? indent : hang);
         if (availFn) {
-          var need = Math.min(w, Math.max(24 * scale, estH * 2)), guard = 0;
-          while (guard++ < 400) {
-            var reg = availFn(y, estH);
-            if (reg) {
-              var x1 = Math.max(x, reg.x), x2 = Math.min(x + w, reg.x + reg.w);
-              if (x2 - x1 >= need) { x = x1; w = x2 - x1; break; }
-            }
-            y += estH; // no room beside the obstacle here: move down a line
+          var need = Math.min(w, Math.max(24 * scale, estH * 2)), got = null, guard = 0;
+          while (slots && slotIdx < slots.length && !got) { got = clip(slots[slotIdx], x, w, need); if (!got) slotIdx++; }
+          if (!got && slots) { y = rowY + rowH; slots = null; } // row used up: start a new one below it
+          while (!got && guard++ < 400) {
+            var regs = availFn(y, estH) || [], k;
+            for (k = 0; k < regs.length && !got; k++) got = clip(regs[k], x, w, need);
+            if (got) { slots = regs; slotIdx = k - 1; rowY = y; rowH = 0; }
+            else y += estH; // no room beside the obstacle here: move down a line
           }
+          if (got) { x = got.x; w = got.w; }
         }
         box = { x: x, w: Math.max(4, w) };
         return box;
       }
+      /** After a line: move to the next slot of the row, or below the row. */
+      function advance(lh) {
+        if (!slots) { y += lh; return; }
+        rowH = Math.max(rowH, lh);
+        slotIdx++;
+        if (slotIdx >= slots.length) { y = rowY + rowH; slots = null; }
+      }
+      /** A paragraph ends its row: the next paragraph starts below it. */
+      function endRow() { if (slots) { y = rowY + rowH; slots = null; } }
       function lineAvail() { return lineBox().w; }
       function shrinkCap() { // justified lines may squeeze their spaces a little to take one more word
         if (!justify) return 0.01;
@@ -166,7 +184,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
           y: y, h: lh, base: y + (lh - natural) / 2 + asc, segs: segs, pi: pi, li: li,
           ri: firstTok ? firstTok.ri : (li === 0 ? 0 : -1), ci: firstTok ? firstTok.s : 0, width: textW, x: x0
         });
-        y += lh;
+        advance(lh);
         hyRun = (end > 0 && tk[end - 1].hy) ? hyRun + 1 : 0;
         cur = []; curW = 0; first = false; box = null; li++;
       }
@@ -226,6 +244,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         cur.push(t); curW += t.w;
       }
       if (cur.length || li === 0) push(true);
+      endRow();
       y += (p.after || 0) * scale;
     });
     return { lines: lines, height: y };
