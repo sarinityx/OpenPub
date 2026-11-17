@@ -262,7 +262,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .rb-collapse svg { width: 15px; height: 15px; }
 .rb-body { display: flex; align-items: stretch; padding: 6px 4px 3px; overflow-x: auto; overflow-y: hidden; min-height: 94px; scrollbar-width: thin; }
 .ribbon.collapsed .rb-body { display: none; }
-.rb-group { display: flex; flex-direction: column; padding: 0 9px; border-right: 1px solid var(--line); flex: none; }
+.rb-group { display: flex; flex-direction: column; padding: 0 7px; border-right: 1px solid var(--line); flex: none; }
 .rb-group:last-child { border-right: 0; }
 .rb-items { display: flex; align-items: flex-start; gap: 3px; flex: 1; }
 .rb-title { text-align: center; font-size: 11px; color: var(--ink-2); padding-top: 2px; white-space: nowrap; }
@@ -272,6 +272,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .rb-btn.lg { flex-direction: column; justify-content: flex-start; height: 69px; min-width: 52px; max-width: 86px; padding: 6px 7px 3px; gap: 4px; }
 .rb-btn.lg svg { width: 26px; height: 26px; }
 .rb-btn.lg .lbl { white-space: normal; line-height: 1.15; text-align: center; font-size: 12px; }
+#rbPainter { max-width: 56px; } /* "Format painter" on two lines keeps the Home tab within 1366 px */
 .rb-btn:hover { background: var(--hi); border-color: var(--hi-line); }
 .rb-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .rb-btn:disabled { opacity: 0.38; cursor: default; background: none; border-color: transparent; }
