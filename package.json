@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "engines": { "node": ">=22.12" },
   "scripts": {
-    "postinstall": "npm install --prefix desktop/appsrc --no-audit --no-fund",
+    "postinstall": "cd desktop/appsrc && npm install --no-audit --no-fund",
     "build": "node tools/build.js",
     "start": "node tools/build.js && electron desktop/appsrc",
     "test": "node tools/build.js && node tools/e2e.js && node tools/e2e-desktop.js",
