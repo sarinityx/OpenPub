@@ -11,6 +11,7 @@ Publisher replacement. Windows desktop app (Electron 45, portable folder, `OpenP
 - Text panel: space before, line spacing as a multiple or exactly in points, left and right indents, first-line indent (negative for a hanging indent).
 - Text overflow "Grow box to fit": the box follows its text downward from the top edge, live while typing, never narrower or wider and never below one line. Not offered for linked boxes or boxes with columns.
 - Format painter (Home › Clipboard, Ctrl+Shift+C / Ctrl+Shift+V): copies text formatting (character and paragraph) and object look (fill, outline, shadow, opacity, corner rounding) onto whole objects. One click applies once; double-click keeps it on until Esc. It applies to a whole text box, not to part of its text.
+- Design checker (Review › Check design, Check tab): text that does not fit (or the last box of a linked chain), pictures below a set resolution (150 ppi by default), objects partly or wholly off the page or outside the bleed, fonts that are not installed (desktop only), empty text boxes, mail-merge fields with no data, and RGB pictures as notes when the output is CMYK. Results are grouped by page; clicking one goes to the object. Export, Print layouts and Tiled poster offer the check when the document has changed since it last ran; it never blocks output.
 
 ### 1.1.1
 - Font drop-down lists every installed font, each shown in its own typeface, with type-to-filter. (The earlier list only showed fonts matching the text already in the box.)
@@ -33,7 +34,7 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 76 desktop end-to-end checks (Electron, clean profile per run), 67 browser checks, parser run over the sample files: all pass on Linux and on Windows 11 as of this version.
+- 77 desktop end-to-end checks (Electron, clean profile per run), 74 browser checks, parser run over the sample files: all pass on Linux and on Windows 11 as of this version.
 - Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
 - Packaged (asar) build smoke-tested on Linux and on Windows (`npm run package:win` run on Windows, including the zip): file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests.
 - CMYK conversion tested with Ghostscript 9.56 code (a WASM build standing in for a system install) and a FOGRA39 profile, and with Ghostscript 10.08 installed on Windows.

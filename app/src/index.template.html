@@ -146,7 +146,16 @@ kbd { font: 11px var(--font-mono); color: var(--ink-2); }
 .tabs { display: flex; border-bottom: 1px solid var(--line); }
 .tabs button { flex: 1; border: 0; background: none; padding: 9px 4px 8px; font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); border-bottom: 2px solid transparent; }
 .tabs button.on { color: var(--ink); border-bottom-color: var(--margin); }
-#props, #layers { flex: 1; overflow-y: auto; padding: 4px 12px 16px; }
+#props, #layers, #check { flex: 1; overflow-y: auto; padding: 4px 12px 16px; }
+.chk { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; }
+.cksum { margin: 0; font-weight: 600; }
+.ckres { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: left; border: 1px solid var(--line); border-left: 3px solid var(--warn); background: var(--field); border-radius: 0 5px 5px 0; padding: 6px 8px; font-size: 12px; }
+.ckres.info { border-left-color: var(--margin); }
+.ckres:hover { background: var(--hi); }
+.ckres.on { box-shadow: 0 0 0 1px var(--sel) inset; }
+.ckres .ckwhat { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ckres .ckmsg { color: var(--ink-2); }
+.ckoffer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .sec { padding: 10px 0 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
 .sec:last-child { border-bottom: 0; }
 .sec h3 { margin: 0 0 1px; font: 600 11px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
@@ -333,9 +342,11 @@ input[type="checkbox"] { accent-color: var(--accent); }
       <div class="tabs" role="tablist">
         <button type="button" id="tabProps" class="on" role="tab">Properties</button>
         <button type="button" id="tabLayers" role="tab">Layers</button>
+        <button type="button" id="tabCheck" role="tab">Check</button>
       </div>
       <div id="props"></div>
       <div id="layers" hidden></div>
+      <div id="check" hidden></div>
     </aside>
   </div>
   <div id="status">
