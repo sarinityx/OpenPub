@@ -11,3 +11,6 @@ Thumbs.db
 *.log
 # local Claude Code settings (shared settings in .claude/settings.json are fine to commit)
 .claude/settings.local.json
+
+# private test files (real-world .pub files; never committed)
+test-data/private/

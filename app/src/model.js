@@ -223,7 +223,11 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       return it;
     }
     if (s.next) it.next = String(s.next);
-    if (s.wa && typeof s.wa === 'object') it.wa = { text: String(s.wa.text || ''), font: String(s.wa.font || 'Arial'), b: !!s.wa.b, i: !!s.wa.i, warp: String(s.wa.warp || 'plain') };
+    if (s.wa && typeof s.wa === 'object') {
+      it.wa = { text: String(s.wa.text || ''), font: String(s.wa.font || 'Arial'), b: !!s.wa.b, i: !!s.wa.i, warp: String(s.wa.warp || 'plain') };
+      // documents from before 1.2 have no alignment: every line was stretched to the width, so keep that
+      it.wa.align = ['center', 'left', 'right', 'stretch'].indexOf(s.wa.align) >= 0 ? s.wa.align : 'stretch';
+    }
     it.fill = s.fill === undefined ? it.fill : s.fill;
     it.stroke = s.stroke === undefined ? it.stroke : s.stroke;
     if (s.radius !== undefined) it.radius = +s.radius || 0;

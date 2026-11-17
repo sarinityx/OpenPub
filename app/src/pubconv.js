@@ -119,23 +119,43 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var id = pub.shapes[k].textId;
       if (id !== null && id !== undefined) frameCount[id] = (frameCount[id] || 0) + 1;
     });
-    var flowState = {}; // story id -> {rem: paragraphs still to place, left: boxes still to come}
+    var flowState = {}; // story id -> boxes that share it: [{item, info, n}]
     var canFlow = !!(opts && opts.flow && OP.splitParasAtHeight);
     function storyFor(textId) {
       if (textId === null || textId === undefined) return null;
       return pub.stories[textId] || null;
     }
     /**
-     * Text for one box of a story. The first box holds the whole story; later boxes are linked
-     * to it and the text flows through the chain (in the order the boxes are stored in the file).
+     * Text for one box of a story. A story in one box gets its text here. Boxes that share a story are
+     * collected and chained once every page is converted (linkStories), in the order the file gives.
      */
-    function takeText(story, item) {
-      var st = flowState[story.id];
-      if (!st) { flowState[story.id] = { last: item }; return convParas(story.paras); }
-      st.last.next = item.id;
-      st.last = item;
-      if ((frameCount[story.id] || 1) > 1) note('Linked text boxes are kept linked. If the text runs through them in the wrong order, re-link them (Properties › Text flow).');
+    function takeText(story, item, info) {
+      if ((frameCount[story.id] || 1) < 2) return convParas(story.paras);
+      (flowState[story.id] = flowState[story.id] || []).push({ item: item, info: info, n: flowState[story.id] ? flowState[story.id].length : 0 });
       return [OP.newPara()];
+    }
+    /** Chain linked boxes: by Publisher's place-in-chain numbers, else by its next-box links, else in file order. */
+    function linkStories() {
+      Object.keys(flowState).forEach(function (sid) {
+        var boxes = flowState[sid], story = pub.stories[sid];
+        if (!boxes.length || !story) return;
+        var bySeq = {};
+        boxes.forEach(function (b) { if (b.info.seq !== undefined) bySeq[b.info.seq] = b; });
+        var ordered = null;
+        if (boxes.every(function (b) { return b.info.prevBox !== undefined || b.info.nextBox !== undefined || boxes.length === 1; })) {
+          // follow the next-box links from the box that has no previous one
+          var head = boxes.filter(function (b) { return b.info.prevBox === undefined || !bySeq[b.info.prevBox]; })[0], seen = {};
+          ordered = [];
+          for (var cur = head; cur && !seen[cur.info.seq]; cur = bySeq[cur.info.nextBox]) { seen[cur.info.seq] = true; ordered.push(cur); }
+          if (ordered.length !== boxes.length) ordered = null;
+        }
+        if (!ordered) {
+          ordered = boxes.slice().sort(function (a, b) { return ((a.info.chainIndex || 0) - (b.info.chainIndex || 0)) || (a.n - b.n); });
+          note('Linked text boxes are kept linked. If the text runs through them in the wrong order, re-link them (Properties › Text flow).');
+        }
+        ordered[0].item.text.paras = convParas(story.paras);
+        for (var i = 0; i + 1 < ordered.length; i++) ordered[i].item.next = ordered[i + 1].item.id;
+      });
     }
 
     // ---- fills / lines
@@ -208,6 +228,21 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       st.width = OP.round(st.width, 2);
       st.dash = DASH[v[0x1CE]] || 'solid';
       return st;
+    }
+
+    /**
+     * BorderArt: the colour and width are in the per-side border properties (the drawing's own line is white).
+     * A colour set by the user is stored as RGB; a scheme reference means the border keeps its own colours,
+     * which Publisher's thumbnails show as black for the built-in borders, so that is drawn black.
+     */
+    function borderArtStroke(s) {
+      var v = s.fopt.v, t = s.tert.v;
+      var sides = [[0x540, 0x54B], [0x580, 0x58B], [0x5C0, 0x5CB], [0x600, 0x60B]];
+      for (var i = 0; i < sides.length; i++) {
+        var w = t[sides[i][1]], c = t[sides[i][0]];
+        if (c !== undefined && w > 0) return { color: (c >>> 24) ? '#000000' : color(c), width: OP.round(w / EMU, 2), dash: 'solid' };
+      }
+      return v[0x1CB] > 0 ? { color: '#000000', width: OP.round(v[0x1CB] / EMU, 2), dash: 'solid' } : null;
     }
 
     function customPath(s) {
@@ -293,7 +328,14 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         it = OP.newShape(kind, f.x, f.y, f.w, f.h);
         if (path) it.path = path;
         it.fill = OP.isOpen(it) ? null : fillOf(s, false);
-        it.stroke = strokeOf(s, kind);
+        it.stroke = info.borderArt ? borderArtStroke(s) : strokeOf(s, kind);
+        if (info.borderArt && it.stroke) {
+          // Publisher draws BorderArt inside the shape's edge; an outline is centred on it, so move it in by half its width
+          var inset = Math.min(it.stroke.width / 2, it.w / 2, it.h / 2);
+          it.x += inset; it.y += inset; it.w -= 2 * inset; it.h -= 2 * inset;
+          it.name = 'BorderArt (plain frame)';
+          note('BorderArt is shown as a plain frame in its colour and width: Publisher keeps its border pictures in the program, not in the file.');
+        }
         if (kind === 'line') {
           it.arrowStart = !!v[0x1D0]; it.arrowEnd = !!v[0x1D1];
         }
@@ -320,7 +362,10 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         if (!it.fill && !it.stroke) it.fill = { type: 'solid', color: '#000000' };
         if (it.fill && it.fill.type === 'image') it.fill = { type: 'solid', color: '#000000' };
         it.kind = 'rect'; delete it.path;
-        it.wa = { text: wt.replace(/\n+$/, ''), font: wf, b: !!(gt & 0x20), i: !!(gt & 0x10), warp: OP.WARP_OF_SHAPE[s.type] || 'plain' };
+        // gtextAlign: 0 stretch each line, 1 centre (the default), 2 left, 3 right, 4/5 letter/word justify (stretched here)
+        var ga = v[0xC2] === undefined ? 1 : v[0xC2];
+        it.wa = { text: wt.replace(/\n+$/, ''), font: wf, b: !!(gt & 0x20), i: !!(gt & 0x10), warp: OP.WARP_OF_SHAPE[s.type] || 'plain',
+          align: ga === 1 ? 'center' : ga === 2 ? 'left' : ga === 3 ? 'right' : 'stretch' };
         it.name = 'WordArt';
         return [it];
       }
@@ -330,7 +375,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       if (story && story.paras.length) {
         var mg = function (id) { return OP.round((v[id] !== undefined ? v[id] : 36576) / EMU, 2); };
         var pad = [mg(0x81), mg(0x82), mg(0x83), mg(0x84)];
-        var paras = takeText(story, it);
+        var paras = takeText(story, it, info);
         it.text = OP.newText(paras);
         it.text.pad = pad;
         it.text.valign = info.valign === 1 ? 'middle' : info.valign === 2 ? 'bottom' : 'top';
@@ -438,10 +483,23 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         if (mp) page.master = mp.id;
         if (master.bgShape !== null && bySeq[master.bgShape]) applyBg(page, bySeq[master.bgShape]);
       }
-      itemsOfPage(pg).forEach(function (it) { page.items.push(it); });
+      var onMaster = {};
+      if (page.master) doc.masters.forEach(function (m) { if (m.id === page.master) m.items.forEach(function (it) { onMaster[sameKey(it)] = true; }); });
+      itemsOfPage(pg).forEach(function (it) {
+        // some templates repeat a master object on the page; the copy draws exactly over it, so keep one
+        if (onMaster[sameKey(it)]) return;
+        page.items.push(it);
+      });
       if (pg.bgShape !== null && bySeq[pg.bgShape]) applyBg(page, bySeq[pg.bgShape]);
       doc.pages.push(page);
     });
+    /** Everything that shows, without ids and grouping, to spot an object repeated exactly. */
+    function sameKey(it) {
+      return JSON.stringify(it, function (k, val) {
+        if (k === 'id' || k === 'group' || k === 'next' || k === 'name') return undefined;
+        return typeof val === 'number' ? Math.round(val * 100) / 100 : val;
+      });
+    }
     function applyBg(page, s) {
       var f = fillOf(s, true);
       if (!f) return;
@@ -451,6 +509,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       page.items.unshift(r);
     }
 
+    linkStories();
     if (!doc.pages.length) { doc.pages.push(OP.newPage()); note('No pages were found in this file.'); }
     var count = 0;
     doc.pages.forEach(function (p) { count += p.items.length; });

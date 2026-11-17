@@ -15,6 +15,15 @@ Publisher replacement. Windows desktop app (Electron 45, portable folder, `OpenP
 - Text wrap on both sides of an obstacle: each row fills the space left of it, then right of it. A side narrower than 36 pt (about 13 mm, `OP.WRAP_MIN_SIDE`) stays empty. Wrap objects on a master page push aside the text of every page that uses that master. The wrap stays visible while typing: in a box that wraps, the canvas draws the text and OpenPub draws the caret and selection; clicks, drags, double-click, Up/Down and Home/End follow the wrapped lines. Spelling underlines are off in such a box while typing.
 - Windows installer (`OpenPub-<version>-win64-setup.exe`, electron-builder 26.18 NSIS), beside the portable zip. One installer: "Only for me" (no administrator rights) or "Anyone who uses this computer"; silent with `/S /currentuser` or `/S /allusers`. Start menu shortcut (no desktop shortcut), uninstall entry in Settings > Apps. `.opub` opens in OpenPub with its own document icon; for `.pub` OpenPub is added to "Open with" and Settings > Default apps, and the existing default program (usually Publisher) is left alone. Uninstalling asks whether to remove settings and the personal dictionary (default: keep); silent uninstalls keep them unless `--delete-app-data` is passed. `OpenPub.exe` has its own icon and version details.
 - A file double-clicked while OpenPub is open goes to the open window, which asks about unsaved changes first (Cancel keeps the open document). An export or print that is running finishes before the file opens. A file double-clicked while OpenPub is still starting opens once it is ready.
+- Import fidelity, checked against 8 real-world certificate templates kept outside the repository (`test-data/private/`) and Publisher's own page thumbnails stored in those files:
+  - Shapes with a coordinate on the page's centre line were dropped (Publisher leaves a zero coordinate out of the position record). They are imported now; this restored a missing text box and a missing rule.
+  - BorderArt becomes a plain frame in its colour and width, inside the shape's edge, with an import note. Publisher keeps the border pictures in the program, not in the file, so the pattern itself cannot be shown. A border left in its own colours is drawn black, as Publisher's thumbnails show.
+  - Multi-line WordArt follows Office's default alignment (centre): one horizontal scale from the longest line, so short lines are no longer stretched to the full width and letters are the same width on every line. The WordArt panel has a Lines setting (Centre, Left, Right, Stretch each line); documents from before 1.2 keep stretched lines.
+  - Outlines thinner than one screen pixel (0.25 pt rules) are drawn one pixel wide on screen and in PNG/JPEG export, as Publisher shows them; SVG and PDF keep the real width.
+  - A page object that repeats a master-page object exactly is imported once.
+  - Linked text boxes are chained in the order the file gives (each box records its previous and next box), not in storage order.
+  - Paragraph left and right indents are read as signed: a negative indent had come out as 338,175 pt.
+  - One finding did not hold up: a background picture that looked rotated 180° is rotated in the file, and Publisher's own thumbnail shows it rotated, so the import was right.
 
 ### 1.1.1
 - Font drop-down lists every installed font, each shown in its own typeface, with type-to-filter. (The earlier list only showed fonts matching the text already in the box.)
@@ -37,7 +46,7 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 81 desktop end-to-end checks (Electron, clean profile per run), 84 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
+- 81 desktop end-to-end checks (Electron, clean profile per run), 94 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
 - Installer (`npm run test:installer`, Windows): silent install per user and per machine, files, version details, Start menu shortcut, uninstall entry, registry for `.opub` and `.pub`, the `.pub` default left unchanged, a `.opub` opened through Windows starts the installed app, the installed app imports a `.pub`, silent uninstall removes everything it added and keeps settings (or removes them with `--delete-app-data`). Per user run on Windows 11; per machine runs on CI.
 - Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
 - Packaged (asar) build smoke-tested on Linux and on Windows (`npm run package:win` run on Windows, including the zip): file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests.
@@ -49,12 +58,16 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 - Printing to a real printer, and the Windows print dialog.
 - The installer's own pages (install mode, the keep-settings question on uninstall) by hand; the tests drive it silently.
-- Import of master-page objects, multi-column boxes and EMF pictures from real files (no sample has them).
+- Import of multi-column boxes and EMF pictures from real files (no sample or private test file has them). Master-page objects are now covered by the private certificate files.
+- Per-cell table borders: the only sample table has none, so where Publisher stores them is not known yet.
 
 ## Known limits
 
 - Cannot save `.pub`. Publisher 98 and 2000 files are rejected.
-- Linked boxes are chained in file order on import. Table import keeps one grid style (per-cell borders are lost). WordArt letters are placed individually, not bent.
+- Table import keeps one grid style (per-cell borders are lost). WordArt letters are placed individually, not bent; WordArt letter- and word-justified alignment are imported as stretched lines.
+- Compound outlines (double, thick-thin, thin-thick, triple) are imported as one solid line of the full width.
+- BorderArt shows as a plain frame (see above).
+- In SampleNewsletter.pub the first lines of one story are cut off at the top of its first box (seen before 1.2 too; not investigated yet).
 - Script plug-ins generally cannot run in the browser build (content security policy); content packs can.
 - No code signing: Windows SmartScreen warns on first run of the installer and of the portable app.
 - A per-machine uninstall removes the settings of the user who runs it (when asked to), not those of other users.
@@ -63,6 +76,6 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 - Code signing.
 - Catalogue merge, design checker, spot colours.
-- Per-cell table borders on import; true bent WordArt glyphs.
+- Per-cell table borders on import (needs a sample file); compound outlines; true bent WordArt glyphs.
 - CI: add the packaged smoke test to the Windows workflow; consider a Linux job.
 - Font drop-down tests: pick from whatever fonts are installed instead of needing Liberation Serif.
