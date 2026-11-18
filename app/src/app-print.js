@@ -162,7 +162,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     if (mode === 'merge' && !mg) { A.dlgMerge(); return; }
     var info = h('p', { class: 'hint' }), bar = h('i'), prog = h('div', { class: 'progress', hidden: true }, [bar]);
     // preview of the sheets exactly as they go to the printer or into the PDF
-    var pvAt = 0, pvSheets = [], pvBox = h('div', { class: 'shpv-sheet', id: 'shPreview' }), pvLabel = h('span', { id: 'shPvLabel' });
+    var pvAt = 0, pvSheets = [], pvBox = h('div', { class: 'shpv-sheet', id: 'shPreview' }), pvLabel = h('span', { id: 'shPvLabel', 'aria-live': 'polite' });
     var pvPrev = ui.btn('‹', function () { pvAt--; drawPreview(); }), pvNext = ui.btn('›', function () { pvAt++; drawPreview(); });
     pvPrev.setAttribute('aria-label', 'Previous sheet'); pvNext.setAttribute('aria-label', 'Next sheet');
     var preview = h('div', { class: 'shpv' }, [pvBox, h('div', { class: 'shpv-nav' }, [pvPrev, pvLabel, pvNext])]);
@@ -256,10 +256,11 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         pvAt = Math.max(0, Math.min(pvAt, pvSheets.length - 1));
         pvBox.innerHTML = '';
         if (!pvSheets.length) { pvLabel.textContent = 'Nothing to print with these settings'; pvPrev.disabled = pvNext.disabled = true; return; }
-        pvBox.appendChild(OP.sheetPreview(d, pvSheets[pvAt], 400, 220));
-        var sh = pvSheets[pvAt], lay = $('shLay').value;
+        var sh = pvSheets[pvAt], lay = $('shLay').value, cv = OP.sheetPreview(d, sh, 400, 220);
         pvLabel.textContent = 'Sheet ' + (pvAt + 1) + ' of ' + pvSheets.length + ', ' + OP.round(sh.w / MM, 0) + ' × ' + OP.round(sh.h / MM, 0) + ' mm' +
           (lay === 'book' ? (pvAt % 2 ? ' (back)' : ' (front)') : '');
+        cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Preview of ' + pvLabel.textContent.charAt(0).toLowerCase() + pvLabel.textContent.slice(1));
+        pvBox.appendChild(cv);
         pvPrev.disabled = pvAt === 0; pvNext.disabled = pvAt >= pvSheets.length - 1;
       }, 60);
     }

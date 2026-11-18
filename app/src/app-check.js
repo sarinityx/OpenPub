@@ -122,8 +122,12 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   A.checkDesign = function (o) {
     if (A.isEditing()) A.endEdit();
     if (o && 'cmyk' in o) prefs.cmyk = !!o.cmyk;
-    var opts = { minPpi: prefs.minPpi, cmyk: prefs.cmyk, fonts: (OP.desktop && A.installedFonts) ? A.installedFonts() : null };
-    S.check = { doc: S.doc, at: S.last, opts: opts, results: OP.checkDesign(S.doc, opts) };
+    // fonts are checked whenever the installed list is known: always on desktop once read, in the browser after Tools › Add installed fonts
+    var fonts = A.installedFonts ? A.installedFonts() : [];
+    var opts = { minPpi: prefs.minPpi, cmyk: prefs.cmyk, fonts: fonts.length ? fonts : null };
+    S.check = { doc: S.doc, at: S.last, opts: opts, results: [], error: null };
+    try { S.check.results = OP.checkDesign(S.doc, opts); }
+    catch (e) { S.check.error = (e && e.message) || String(e); if (window.console) console.warn('Check design failed:', e); }
     A.showTab('check');
     return S.check.results;
   };
@@ -138,36 +142,59 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var root = $('check');
     if (!root) return;
     var keep = root.scrollTop;
+    // the tab is rebuilt after every selection and every rerun: put keyboard focus back where it was
+    var act = document.activeElement, focusId = act && act !== root && root.contains(act) ? act.id : null;
     root.innerHTML = '';
     var cur = S.check && S.check.doc === S.doc ? S.check : null;
     var cmyk = h('input', { type: 'checkbox', id: 'ckCmyk' });
     cmyk.checked = prefs.cmyk;
     cmyk.addEventListener('change', function () { prefs.cmyk = cmyk.checked; if (cur) A.checkDesign(); });
+    var canFonts = !!(A.installedFonts && A.installedFonts().length);
     root.appendChild(ui.sec('Check design', [
-      h('p', { class: 'hint', text: 'Finds text that does not fit, low-resolution pictures, objects off the page, missing fonts, empty text boxes and mail-merge fields with no data.' }),
+      h('p', { class: 'hint', text: 'Finds text that does not fit, low-resolution pictures, objects off the page, ' + (canFonts ? 'missing fonts, ' : '') +
+        'empty text boxes and mail-merge fields with no data.' + (canFonts || OP.desktop ? '' : ' To check fonts too, choose Tools › Add installed fonts to the font list first.') }),
       h('div', { class: 'row wrap' }, [ui.btn(cur ? 'Check again' : 'Check design', function () { A.checkDesign(); }, 'primary', 'ckRun')]),
       ui.row('Pictures at least', [ui.num('ckPpi', prefs.minPpi, { unit: 'ppi', min: 50, max: 1200, step: 25, dec: 0, aria: 'Lowest picture resolution' }, function (v, f) {
         prefs.minPpi = v; if (f && cur) A.checkDesign();
       })], 'ckPpi'),
-      h('label', { class: 'chk', for: 'ckCmyk' }, [cmyk, 'Output is CMYK for a print shop: list RGB pictures'])
+      h('label', { class: 'chk', for: 'ckCmyk' }, [cmyk, 'Going to a print shop in CMYK (list RGB pictures)'])
     ]));
-    if (!cur) { root.scrollTop = 0; return; }
-    var rs = cur.results, probs = rs.filter(function (r) { return r.level !== 'info'; }).length, infos = rs.length - probs;
+    function done() {
+      root.scrollTop = keep;
+      var f = focusId && $(focusId);
+      if (f) f.focus({ preventScroll: true });
+    }
+    if (!cur) { root.scrollTop = 0; done(); return; }
     var sum = [];
     if (cur.at !== S.last) sum.push(h('div', { class: 'note', text: 'The document has changed since this check. Check again to update the list.' }));
+    if (cur.error) {
+      sum.push(h('p', { class: 'cksum ckerr', id: 'ckSum', role: 'alert', text: 'The check could not finish: ' + cur.error }));
+      sum.push(h('p', { class: 'hint', text: 'Nothing in the document was changed. Try Check again; if it fails again, save the project and report the message above.' }));
+      root.appendChild(h('div', { class: 'sec' }, sum));
+      done(); return;
+    }
+    var rs = cur.results, probs = rs.filter(function (r) { return r.level !== 'info'; }).length, infos = rs.length - probs;
     sum.push(h('p', { class: 'cksum', id: 'ckSum', text: !rs.length ? 'No problems found.' :
-      (probs ? probs + (probs === 1 ? ' problem' : ' problems') : 'No problems') + (infos ? ', ' + infos + (infos === 1 ? ' note' : ' notes') : '') + '. Click one to go to it.' }));
+      (probs ? probs + (probs === 1 ? ' problem' : ' problems') : 'No problems') + (infos ? ', ' + infos + (infos === 1 ? ' note' : ' notes') : '') + '. Choose one to go to it.' }));
+    if (!cur.opts.fonts) {
+      sum.push(h('p', { class: 'hint', id: 'ckFonts', text: OP.desktop ? 'Fonts were not checked: the list of installed fonts had not loaded yet. Check again in a moment.' :
+        'Fonts were not checked: the browser has not listed the installed fonts. Choose Tools › Add installed fonts to the font list, then check again.' }));
+    }
     root.appendChild(h('div', { class: 'sec' }, sum));
     var groups = [], byWhere = {};
     rs.forEach(function (r) { if (!byWhere[r.where]) { byWhere[r.where] = []; groups.push(r.where); } byWhere[r.where].push(r); });
+    var n = 0;
     groups.forEach(function (g) {
       root.appendChild(ui.sec(g, byWhere[g].map(function (r) {
         var on = S.sel.length === 1 && S.sel[0] === r.id && (r.master ? S.master === r.master : (!S.master && S.pi === r.page));
-        return h('button', { type: 'button', class: 'ckres' + (r.level === 'info' ? ' info' : '') + (on ? ' on' : ''), 'data-id': r.id, 'data-kind': r.kind,
-          onclick: function () { A.showCheckResult(r); } }, [h('span', { class: 'ckwhat', text: r.label }), h('span', { class: 'ckmsg', text: r.text })]);
+        var info = r.level === 'info';
+        return h('button', { type: 'button', id: 'ckr' + (n++), class: 'ckres' + (info ? ' info' : '') + (on ? ' on' : ''), 'aria-current': on ? 'true' : null,
+          'data-id': r.id, 'data-kind': r.kind, onclick: function () { A.showCheckResult(r); } }, [
+          h('span', { class: 'ckwhat' }, [h('span', { class: 'cklevel', text: info ? 'Note' : 'Problem' }), r.label]),
+          h('span', { class: 'ckmsg', text: r.text })]);
       })));
     });
-    root.scrollTop = keep;
+    done();
   };
 
   // ---------------------------------------------------------------- offered before output
@@ -176,7 +203,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     var body = document.querySelector('#modal .dlg .body');
     if (!body || $('ckOffer')) return;
     body.insertBefore(h('div', { class: 'note ckoffer', id: 'ckOffer' }, [
-      h('span', { text: 'This design has not been checked yet. The check finds text that does not fit, low-resolution pictures, objects off the page and more. ' }),
+      h('span', { text: (S.check && S.check.doc === S.doc ? 'The design has changed since it was last checked.' : 'This design has not been checked yet.') + ' The check finds text that does not fit, low-resolution pictures, objects off the page and more. ' }),
       ui.btn('Check design', function () { var c = isCmyk(); A.closeModal(true); A.checkDesign({ cmyk: c }); }, '', 'ckOfferBtn')
     ]), body.firstChild);
   }
