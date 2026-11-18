@@ -1,6 +1,7 @@
 # OpenPub
 
-A desktop page-layout editor that opens Microsoft Publisher (`.pub`) files. Built because Microsoft retires Publisher in October 2026.
+A desktop page-layout editor that opens Microsoft Publisher (`.pub`) files. Built because Microsoft retired Publisher in October 2026 and the notion of using Word and PowerPoint as alternatives is insane.
+
 
 - Opens `.pub` files from Publisher 2002 to 2021 / Microsoft 365. Publisher 98 and 2000 files are rejected.
 - Saves projects as `.opub`. It cannot save `.pub`.
