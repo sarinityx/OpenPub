@@ -25,6 +25,27 @@ exports.fileUrl = function (p) { return require('url').pathToFileURL(p).href; };
 exports.have = function (cmd) {
   try { cp.execSync((process.platform === 'win32' ? 'where ' : 'command -v ') + cmd, { stdio: 'ignore' }); return true; } catch (e) { return false; }
 };
+/**
+ * Make sure the poppler tools come first on PATH for this process. Git for Windows ships xpdf's pdftotext and
+ * pdfinfo in its ucrt64/bin, and Git Bash puts that folder ahead of poppler. xpdf orders text differently (it mixes
+ * WordArt letters with nearby text), so the PDF text checks would fail for reasons that have nothing to do with OpenPub.
+ * Returns true when a poppler pdftotext was found; false when only another pdftotext (or none) is installed.
+ */
+exports.preferPoppler = function () {
+  let all = [];
+  try {
+    all = cp.execSync(process.platform === 'win32' ? 'where pdftotext' : 'which -a pdftotext', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  } catch (e) { return false; }
+  const isPoppler = (exe) => {
+    const r = cp.spawnSync(exe, ['-v'], { encoding: 'utf8' });
+    return /poppler/i.test((r.stdout || '') + (r.stderr || ''));
+  };
+  const found = all.find(isPoppler);
+  if (!found) return false;
+  if (found !== all[0]) process.env.PATH = path.dirname(found) + path.delimiter + process.env.PATH;
+  return true;
+};
 exports.sh = function (cmd) {
   try { return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return 'ERR ' + (e.stderr || e.message); }
 };

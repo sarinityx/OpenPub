@@ -21,6 +21,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
 - Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 83 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
+- Git for Windows ships xpdf's `pdftotext`/`pdfinfo` in `ucrt64/bin`, which Git Bash puts ahead of poppler on PATH. xpdf orders text differently and breaks the PDF text checks, so the desktop tests move poppler's folder to the front themselves (`preferPoppler` in `tools/lib.js`) and skip the PDF checks if only xpdf is installed.
 - The font drop-down checks pick from whatever fonts are installed; no particular font is needed.
 - Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
 - CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed, then packages, runs the packaged smoke test, builds the installer and runs the installer test (per user and per machine). `test-out/` and the installer are uploaded as artifacts.
