@@ -1,0 +1,35 @@
+# Dependabot: weekly pull requests that update dependencies. Each one runs the Windows tests like any
+# other pull request. Security updates (raised as soon as an advisory appears) also need
+# "Dependabot security updates" turned on under Settings > Advanced Security.
+version: 2
+updates:
+  # build and test tools: Electron, @electron/packager, electron-builder, playwright-core
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7 # wait a week after a release before proposing it
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  # the desktop app's own dependency (nspell)
+  - package-ecosystem: npm
+    directory: /desktop/appsrc
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  # the actions in .github/workflows, pinned to commit SHAs; Dependabot updates the SHA and its version comment
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
