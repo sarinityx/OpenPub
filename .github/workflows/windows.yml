@@ -25,9 +25,9 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22' # the minimum in package.json engines
           cache: npm
@@ -35,7 +35,7 @@ jobs:
             package-lock.json
             desktop/appsrc/package-lock.json
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -51,6 +51,9 @@ jobs:
         run: |
           $zip = Join-Path $env:RUNNER_TEMP 'poppler.zip'
           Invoke-WebRequest 'https://github.com/oschwartz10612/poppler-windows/releases/download/v25.07.0-0/Release-25.07.0-0.zip' -OutFile $zip
+          # SHA-256 published with the release asset
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          if ($hash -ne '435E6265738470B7AE6498B8A298A4025BACB9349656207EF54D0F069687CE57') { throw "Unexpected poppler zip: SHA-256 $hash" }
           Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'poppler')
           $bin = Join-Path $env:RUNNER_TEMP 'poppler\poppler-25.07.0\Library\bin'
           Add-Content $env:GITHUB_PATH $bin
@@ -65,6 +68,9 @@ jobs:
           $exe = Join-Path $env:RUNNER_TEMP 'gs10080w64.exe'
           Invoke-WebRequest 'https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe' -OutFile $exe
           "downloaded: $((Get-Item $exe).Length) bytes"
+          # SHA-256 published with the release asset, then the Authenticode signature
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($hash -ne '52A91B8BF09298788D7A57B9206127026C23EACD75405F0A131E26DC381DCE50') { throw "Unexpected Ghostscript installer: SHA-256 $hash" }
           $sig = Get-AuthenticodeSignature $exe
           if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Artifex Software') { throw "Unexpected signature: $($sig.Status) $($sig.SignerCertificate.Subject)" }
           "signature: $($sig.Status), $($sig.SignerCertificate.Subject)"
@@ -98,20 +104,20 @@ jobs:
       - name: Installer tests
         run: npm run test:installer
 
-      # Kept for 3 days: the installer is about 100 MB and private repositories on GitHub Free
-      # have 500 MB of Actions storage.
+      # For trying out a pull request's build. Artifacts expire; releases (with the installer
+      # and zip attached) are the downloads for users.
       - name: Upload installer
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: OpenPub-installer
           path: desktop/dist/OpenPub-*-win64-setup.exe
-          retention-days: 3
+          retention-days: 7
           compression-level: 0
           if-no-files-found: error
 
       - name: Upload test output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-out
           path: test-out/

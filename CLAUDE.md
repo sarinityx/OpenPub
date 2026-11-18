@@ -25,6 +25,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - The font drop-down checks pick from whatever fonts are installed; no particular font is needed.
 - Set `OPENPUB_REQUIRE_ALL=1` to make the desktop tests fail instead of skipping when a tool is missing. CI does.
 - CI: `.github/workflows/windows.yml` runs the web, desktop and parser tests on `windows-latest` for pushes to `main` and pull requests, with every tool installed, then packages, runs the packaged smoke test, builds the installer and runs the installer test (per user and per machine). `test-out/` and the installer are uploaded as artifacts.
+- Workflow actions are pinned to full commit SHAs with the version in a comment (`@<sha> # v7.0.1`); Dependabot (`.github/dependabot.yml`) proposes updates. Downloads in CI (poppler, Ghostscript) are checked against their published SHA-256.
 - The installer test refuses to run if OpenPub is already installed (it uninstalls as part of the test). Without administrator rights it skips the per-machine half.
 - Always run `npm run build` before testing by hand; the tests load the built file, not `app/src`.
 
