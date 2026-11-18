@@ -46,6 +46,8 @@ if (fs.existsSync(locales)) for (const f of fs.readdirSync(locales)) if (!/^en-(
 
 // 4. read-me and examples beside the executable
 fs.copyFileSync(path.join(DESKTOP, 'README-win.txt'), path.join(out, 'README.txt'));
+// OpenPub's licence; LICENSE in the folder is Electron's
+fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(out, 'LICENSE-OpenPub.txt'));
 fs.mkdirSync(path.join(out, 'examples'), { recursive: true });
 for (const f of fs.readdirSync(path.join(DESKTOP, 'examples'))) fs.copyFileSync(path.join(DESKTOP, 'examples', f), path.join(out, 'examples', f));
 console.log('packaged', path.relative(ROOT, out));

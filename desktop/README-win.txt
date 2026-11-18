@@ -61,6 +61,7 @@ HELP
   Help > Shortcuts and tips, and Help > What works and what does not.
 
 LICENCES
+  OpenPub: MIT licence, LICENSE-OpenPub.txt in this folder.
   Electron and Chromium: LICENSE and LICENSES.chromium.html in this folder.
   Australian English dictionary (dictionary-en-au) and nspell: see their
   licence files inside resources\app.asar (dict\en-AU-LICENSE.txt).

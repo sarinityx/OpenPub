@@ -52,3 +52,7 @@ On Linux without a display, run the desktop tests under `xvfb-run -a`. Some PDF 
 ## Optional: CMYK output
 
 Vector CMYK PDF needs [Ghostscript](https://ghostscript.com), which is not included (AGPL licence). OpenPub uses it when it is installed.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Electron and Chromium, the Australian English dictionary and the Apache POI sample files keep their own licences (listed in `desktop/README-win.txt` and `test-data/README.md`).
