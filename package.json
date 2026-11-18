@@ -3,7 +3,7 @@
   "version": "1.2.1",
   "private": true,
   "description": "OpenPub: a desktop page-layout editor that opens Microsoft Publisher (.pub) files",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": { "node": ">=22.12" },
   "scripts": {
     "postinstall": "cd desktop/appsrc && npm install --no-audit --no-fund",
