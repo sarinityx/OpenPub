@@ -411,6 +411,8 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   });
   await page.waitForSelector('#ted.wrapedit');
   ok(await page.evaluate(() => OP.app.isWrapEditing()), 'editing a box with text wrap switches to live wrap (editor text hidden, canvas draws it)');
+  ok(await page.evaluate(() => /Spelling marks are off while you type in a box with text wrap/.test(document.getElementById('stmsg').textContent)),
+    'the status bar says spelling marks are off while typing in a box with text wrap');
   await page.keyboard.press('Control+End');
   await page.keyboard.type(' Typed while editing.');
   await page.waitForTimeout(150);
@@ -443,6 +445,23 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.click('#tbUndo');
   const weUndone = await page.evaluate((w) => OP.plainText(OP.app.find(w.id).text), we);
   ok(!ended.on && !ended.has && /X/.test(ended.text) && !/Typed while editing|X/.test(weUndone), 'Esc keeps the text; one undo reverts the whole edit');
+  // coloured text keeps its colour through a wrap edit (the hidden editor text is transparent, the runs must not be)
+  const wc = await page.evaluate(() => {
+    const A = OP.app, d = OP.newDoc(), pg = d.pages[0];
+    const box = OP.newTextBox(40, 60, 300, 200, [OP.newPara([OP.newRun('White words on navy, and ', { size: 14, font: 'Arial', color: '#ffffff' }), OP.newRun('red ones.', { size: 14, font: 'Arial', color: '#c0392b' })])]);
+    box.fill = { type: 'solid', color: '#14213d' };
+    const ob = OP.newShape('rect', 150, 90, 60, 60); ob.wrap = { mode: 'square', dist: 6 };
+    pg.items.push(box, ob); A.loadDoc(d); A.setSel([box.id]); A.beginEdit(box);
+    return box.id;
+  });
+  await page.waitForSelector('#ted.wrapedit');
+  await page.keyboard.press('Control+End'); await page.keyboard.type(' More');
+  await page.waitForTimeout(150);
+  const wcLive = await page.evaluate((id) => OP.app.find(id).text.paras[0].runs.map(r => r.color).join(','), wc);
+  await page.keyboard.press('Escape');
+  const wcEnd = await page.evaluate((id) => OP.app.find(id).text.paras[0].runs.map(r => r.t.trim() + ':' + r.color).join(' | '), wc);
+  ok(!/#000000/.test(wcLive) && /White words on navy, and:#ffffff \| red ones\. More:#c0392b/.test(wcEnd), 'text colours survive typing in a box with text wrap: ' + wcEnd);
+  await page.evaluate(() => { OP.app.S.dirty = false; });
 
   // ---- design checker (Review › Check design)
   const seeded = await page.evaluate(() => {
@@ -469,9 +488,17 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
     if (await page.evaluate((id) => OP.app.S.sel.length === 1 && OP.app.S.sel[0] === id, found[i][1])) clicked++;
   }
   ok(clicked === found.length, 'clicking each result selects its object (' + clicked + ' of ' + found.length + ')');
+  // keyboard: Enter on a result selects it and keeps focus on it (the tab is rebuilt underneath), Tab reaches the next
+  await page.focus('#ckr0'); await page.keyboard.press('Enter');
+  const kb1 = await page.evaluate(() => { const a = document.activeElement; return { id: a.id, cur: a.getAttribute('aria-current'), sel: OP.app.S.sel[0], want: a.dataset.id }; });
+  await page.keyboard.press('Tab');
+  const kb2 = await page.evaluate(() => document.activeElement.id);
+  ok(kb1.id === 'ckr0' && kb1.cur === 'true' && kb1.sel === kb1.want && kb2 === 'ckr1', 'Enter on a result selects it, keeps focus there with aria-current, and Tab goes on to the next (' + kb1.id + ' -> ' + kb2 + ')');
+  const words = await page.evaluate(() => [document.querySelector('#check .ckres .cklevel').textContent, (document.getElementById('ckFonts') || {}).textContent || '']);
+  ok(words[0] === 'Problem' && /Fonts were not checked/.test(words[1]), 'each result says Problem or Note in words, and a skipped font check is reported: ' + words[1]);
   await page.check('#ckCmyk');
-  const withCmyk = await page.evaluate(() => [Array.from(document.querySelectorAll('#check .ckres.info')).map(b => b.dataset.kind).join(','), document.getElementById('ckSum').textContent]);
-  ok(withCmyk[0] === 'rgb' && /5 problems, 1 note/.test(withCmyk[1]), 'CMYK output lists the RGB picture as a note: ' + withCmyk[1]);
+  const withCmyk = await page.evaluate(() => [Array.from(document.querySelectorAll('#check .ckres.info')).map(b => b.dataset.kind + ':' + b.querySelector('.cklevel').textContent).join(','), document.getElementById('ckSum').textContent, document.activeElement.id]);
+  ok(withCmyk[0] === 'rgb:Note' && /5 problems, 1 note/.test(withCmyk[1]) && withCmyk[2] === 'ckCmyk', 'CMYK output lists the RGB picture as a note, and the checkbox keeps focus: ' + withCmyk[1]);
   await page.uncheck('#ckCmyk');
   const fontRes = await page.evaluate(() => {
     const d = OP.newDoc(); d.pages[0].items.push(OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('Hello', { size: 12, font: 'Nowhere Sans' })])]));
@@ -480,7 +507,8 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   ok(fontRes.length === 1 && /^font: .*Nowhere Sans/.test(fontRes[0]), 'a font that is not installed is reported: ' + fontRes[0]);
   await page.evaluate((id) => { const A = OP.app; A.find(id).x += 1; A.commit(); }, seeded.fine);
   await page.evaluate(() => OP.app.dlgExport());
-  const offered = await page.evaluate(() => !!document.getElementById('ckOffer') && document.getElementById('modal').classList.contains('open'));
+  const offered = await page.evaluate(() => !!document.getElementById('ckOffer') && document.getElementById('modal').classList.contains('open') &&
+    /changed since it was last checked/.test(document.getElementById('ckOffer').textContent));
   await page.evaluate(() => OP.app.closeModal(true));
   await page.click('#ckRun');
   await page.evaluate(() => OP.app.dlgExport());
@@ -490,6 +518,21 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.evaluate(() => { const A = OP.app, d = OP.newDoc(); d.pages[0].items.push(OP.newTextBox(40, 40, 200, 40, [OP.newPara([OP.newRun('All good', { size: 12, font: 'Arial' })])])); A.loadDoc(d); A.checkDesign(); });
   const clean = await page.evaluate(() => [document.querySelectorAll('#check .ckres').length, document.getElementById('ckSum').textContent]);
   ok(clean[0] === 0 && clean[1] === 'No problems found.', 'a clean document reports none: ' + clean[1]);
+  const failed = await page.evaluate(() => {
+    const base = OP.checkDesign; OP.checkDesign = function () { throw new Error('test failure'); };
+    try { OP.app.checkDesign(); } finally { OP.checkDesign = base; }
+    const s = document.getElementById('ckSum'); return [s.textContent, s.getAttribute('role')];
+  });
+  ok(failed[0] === 'The check could not finish: test failure' && failed[1] === 'alert', 'a check that fails says so in the tab: ' + failed[0]);
+  // side-panel tabs: ARIA tabs pattern, arrows move between tabs and do not nudge the selection
+  const tabs0 = await page.evaluate(() => { const A = OP.app, b = A.S.doc.pages[0].items[0]; A.setSel([b.id]); A.showTab('props'); return { x: b.x, id: b.id }; });
+  await page.focus('#tabProps'); await page.keyboard.press('ArrowRight');
+  const tabs1 = await page.evaluate((t) => ({ focus: document.activeElement.id, tab: OP.app.S.tab, sel: document.getElementById('tabLayers').getAttribute('aria-selected'),
+    ti: ['tabProps', 'tabLayers', 'tabCheck'].map(id => document.getElementById(id).tabIndex).join(','), moved: OP.app.find(t.id).x !== t.x }), tabs0);
+  await page.keyboard.press('End');
+  const tabs2 = await page.evaluate(() => [document.activeElement.id, OP.app.S.tab]);
+  ok(tabs1.focus === 'tabLayers' && tabs1.tab === 'layers' && tabs1.sel === 'true' && tabs1.ti === '-1,0,-1' && !tabs1.moved && tabs2[0] === 'tabCheck' && tabs2[1] === 'check',
+    'side-panel tabs: Right and End move between tabs (roving tabindex ' + tabs1.ti + '), the selected object does not move');
   await page.evaluate(() => { OP.app.showTab('props'); OP.app.S.dirty = false; });
 
   // ---- import fidelity (1.2 item 8). Real-world certificate files stay private (test-data/private), so the
@@ -592,6 +635,8 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   const pv2 = await page.evaluate(() => { const c = document.querySelector('#shPreview canvas'); return { label: document.getElementById('shPvLabel').textContent, ratio: c.width / c.height }; });
   ok(/Sheet 1 of 3, 210 × 297 mm/.test(pv1.label) && Math.abs(pv1.ratio - 210 / 297) < 0.02 && /Sheet 2 of 2, 420 × 297 mm \(back\)/.test(pv2.label) && Math.abs(pv2.ratio - 420 / 297) < 0.02,
     'print layouts preview shows each sheet: ' + pv1.label + ' / booklet ' + pv2.label);
+  const pvA11y = await page.evaluate(() => { const c = document.querySelector('#shPreview canvas'); return [c.getAttribute('role'), c.getAttribute('aria-label'), document.getElementById('shPvLabel').getAttribute('aria-live')]; });
+  ok(pvA11y[0] === 'img' && /^Preview of sheet 2 of 2, 420 × 297 mm \(back\)$/.test(pvA11y[1]) && pvA11y[2] === 'polite', 'the preview is named for screen readers and its label is announced: ' + pvA11y[1]);
   await page.keyboard.press('Escape');
   await page.evaluate(() => { OP.app.S.dirty = false; });
   await page.evaluate(() => { OP.app.S.dirty = false; });

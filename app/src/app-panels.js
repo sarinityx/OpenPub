@@ -183,15 +183,27 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
   }
 
   // ---------------------------------------------------------------- properties
+  var TABS = [['tabProps', 'props'], ['tabLayers', 'layers'], ['tabCheck', 'check']];
   A.showTab = function (t) {
     S.tab = t;
-    [['tabProps', 'props'], ['tabLayers', 'layers'], ['tabCheck', 'check']].forEach(function (p) {
+    TABS.forEach(function (p) {
       var tab = $(p[0]), pane = $(p[1]);
-      if (tab) { tab.classList.toggle('on', t === p[1]); tab.setAttribute('aria-selected', t === p[1] ? 'true' : 'false'); }
+      // only the open tab is in the Tab order; the arrow keys move between tabs (ARIA tabs pattern)
+      if (tab) { tab.classList.toggle('on', t === p[1]); tab.setAttribute('aria-selected', t === p[1] ? 'true' : 'false'); tab.tabIndex = t === p[1] ? 0 : -1; }
       if (pane) pane.hidden = t !== p[1];
     });
     A.refreshPanels();
   };
+  var tabList = document.querySelector('#side .tabs');
+  if (tabList) tabList.addEventListener('keydown', function (e) {
+    var ids = TABS.map(function (p) { return p[0]; }).filter(function (id) { return $(id); }), i = ids.indexOf(document.activeElement && document.activeElement.id);
+    if (i < 0) return;
+    var j = e.key === 'ArrowRight' ? (i + 1) % ids.length : e.key === 'ArrowLeft' ? (i + ids.length - 1) % ids.length : e.key === 'Home' ? 0 : e.key === 'End' ? ids.length - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    $(ids[j]).focus();
+    $(ids[j]).click();
+  });
 
   A.refreshPanels = function () {
     if (!S.doc) return;
