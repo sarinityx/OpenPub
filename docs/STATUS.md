@@ -1,10 +1,18 @@
 # OpenPub – status
 
-Version 1.2.0, 18 November 2026.
+Version 1.2.1, 18 November 2026.
 
 Publisher replacement. Windows desktop app (Electron 45; installer or portable folder, `OpenPub.exe`), built from a single-file editor that also runs in a browser.
 
 ## What is built
+
+### 1.2.1
+- Fixed: typing in a text box with text wrap turned coloured text black (from 1.2.0's wrap-while-typing).
+- Design checker: keyboard focus stays put when the results refresh; each result says Problem or Note in words; fonts are checked whenever the installed list is known, and the tab says when they were not; a check that fails says so instead of showing old results; the offer before output says when the design changed since the last check.
+- Keyboard and screen readers: the side-panel tabs follow the standard tabs pattern (arrow keys, Home, End); Enter on a focused control presses it without also starting text editing; Space presses a focused button; the print layouts preview is labelled and its sheet number announced.
+- Pointer cursor on every usable control, not-allowed on disabled ones.
+- While typing in a wrapped box, the caret and selection have a light halo so they show on any fill (system colours in forced-colours mode), and the status bar says why spelling marks are off.
+- Tests: the desktop tests use poppler's `pdftotext` even when Git Bash puts xpdf's first on PATH.
 
 ### 1.2.0
 - Home › Align on the ribbon: left, centre, right, top, middle, bottom, space evenly across and down. With one object it aligns to the page. Buttons are greyed out until there is something to move; spacing needs three or more objects.
