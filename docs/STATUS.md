@@ -52,7 +52,7 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 83 desktop end-to-end checks (Electron, clean profile per run), 96 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
+- 83 desktop end-to-end checks (Electron, clean profile per run), 103 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
 - Installer (`npm run test:installer`, Windows): silent install per user and per machine, files, version details, Start menu shortcut, uninstall entry, registry for `.opub` and `.pub`, the `.pub` default left unchanged, a `.opub` opened through Windows starts the installed app, the installed app imports a `.pub`, silent uninstall removes everything it added and keeps settings (or removes them with `--delete-app-data`). Per user run on Windows 11; per machine runs on CI.
 - Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
 - Packaged (asar) build smoke-tested on Linux and on Windows, and on every CI run (`tools/smoke-packaged.js`): exe version details, file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests, no script errors.

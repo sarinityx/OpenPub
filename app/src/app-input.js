@@ -681,6 +681,11 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       return;
     }
     if (typing(e)) return;
+    // Enter on a focused control presses it (and does not also start editing the selected box). On a side-panel tab
+    // the arrows move to the next tab. A control reached with the keyboard keeps Space (press it); after a mouse
+    // click the button has focus but not :focus-visible, so Space still pans.
+    var ctl = e.target && e.target.closest && e.target.closest('button, a[href], summary, [role="tab"], [role="button"]');
+    if (ctl && (e.key === 'Enter' || (/^Arrow/.test(e.key) && ctl.getAttribute('role') === 'tab') || (e.key === ' ' && ctl.matches(':focus-visible')))) return;
     if (e.key === 'Escape' && S.painter) { A.stopPainter(); A.toast('Format painter off.'); return; }
     if (e.key === ' ') { spaceDown = true; if (!S.drag) $('ov').style.cursor = 'grab'; e.preventDefault(); return; }
     if (mod) {

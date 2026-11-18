@@ -218,7 +218,18 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       !!a.s === !!b.s && !!a.caps === !!b.caps && (a.sp || 0) === (b.sp || 0);
   }
 
+  /**
+   * Paragraphs from the editor. While typing in a box with text wrap, the editor's text is styled transparent so the
+   * canvas can draw it; styleOf reads computed colours, so that styling is lifted for the moment of reading (no paint
+   * happens in between) and the resulting class change is dropped from the observer's queue.
+   */
   function readEditor() {
+    if (!ed || !ed.classList.contains('wrapedit')) return readEditorNow();
+    ed.classList.remove('wrapedit');
+    try { return readEditorNow(); }
+    finally { ed.classList.add('wrapedit'); if (observer) observer.takeRecords(); }
+  }
+  function readEditorNow() {
     var paras = [], cur = null;
     function attrsOf(el, inherit) {
       var a = inherit ? OP.clone(inherit) : { a: paraAttrs({}), align: 'left' };
@@ -297,6 +308,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     origParas = OP.clone(tg.text.paras);
     ed.classList.add('wrapedit');
     ed.spellcheck = false; // its underlines would sit where the hidden text is, not where it is drawn
+    A.status(wrapSpellMsg());
     observer = new MutationObserver(scheduleSync);
     observer.observe(ed, { childList: true, subtree: true, characterData: true, attributes: true });
     ed.addEventListener('pointerdown', wrapPointerDown);
@@ -305,7 +317,10 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     ed.addEventListener('dblclick', wrapDblClick);
     ed.addEventListener('keydown', wrapKey);
   }
+  function wrapSpellMsg() { return 'Spelling marks are off while you type in a box with text wrap.' + (OP.desktop ? ' Review › Spelling (F7) still checks it.' : ''); }
   function stopWrapEdit() {
+    var m = document.getElementById('stmsg');
+    if (wrapEdit && m && m.textContent === wrapSpellMsg()) A.status('');
     if (observer) observer.disconnect();
     observer = null; wrapEdit = false; origParas = null; dragging = false; goalX = null;
   }
@@ -504,8 +519,10 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       var p = [boxToScreen(it, x1, y1), boxToScreen(it, x2, y1), boxToScreen(it, x2, y2), boxToScreen(it, x1, y2)];
       ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y); for (var i = 1; i < 4; i++) ctx.lineTo(p[i].x, p[i].y); ctx.closePath();
     }
+    // The caret and selection must show on any fill, so each is drawn twice: a light halo, then a dark line.
+    // In Windows high-contrast mode the system highlight colours are used instead.
+    var forced = window.matchMedia && window.matchMedia('(forced-colors: active)').matches;
     if (cmpPos(from, to) !== 0) {
-      ctx.fillStyle = 'rgba(46, 125, 230, 0.32)';
       L.lines.forEach(function (ln) {
         if (ln.pi < from.pi || ln.pi > to.pi) return;
         var r = lineRange(L, ln);
@@ -513,14 +530,20 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
         var s0 = ln.pi === from.pi ? Math.max(r.s, from.off) : r.s, s1 = ln.pi === to.pi ? Math.min(r.e, to.off) : r.e;
         if (s1 <= s0) return;
         quad(xOnLine(L, ln, s0), L.col.y + ln.y, xOnLine(L, ln, s1), L.col.y + ln.y + ln.h);
-        ctx.fill();
+        ctx.fillStyle = forced ? 'Highlight' : 'rgba(46, 125, 230, 0.32)';
+        ctx.globalAlpha = forced ? 0.5 : 1; ctx.fill(); ctx.globalAlpha = 1;
+        // an edge that stays visible where the tint does not (a blue fill)
+        ctx.lineWidth = 2; ctx.strokeStyle = forced ? 'HighlightText' : '#ffffff'; ctx.stroke();
+        ctx.lineWidth = 1; ctx.strokeStyle = forced ? 'Highlight' : '#1f5fbf'; ctx.stroke();
       });
     }
     var ln = lineOf(L, f);
     if (!ln) return;
     var cx = xOnLine(L, ln, f.off), top = boxToScreen(it, cx, L.col.y + ln.y), bot = boxToScreen(it, cx, L.col.y + ln.y + ln.h);
-    ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y);
+    ctx.strokeStyle = forced ? 'Canvas' : '#ffffff'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = forced ? 'CanvasText' : '#000000'; ctx.lineWidth = 1.5; ctx.stroke();
   };
 
   function wrapPointerDown(e) {
