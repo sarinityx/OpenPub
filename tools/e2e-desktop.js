@@ -3,7 +3,10 @@ const path = require('path'), fs = require('fs'), cp = require('child_process');
 const lib = require('./lib');
 const PUBS = lib.PUBS, OUT = lib.outDir('desktop');
 // Optional inspection tools. Checks that need a missing one are reported as SKIP, not FAIL.
-const POPPLER = lib.have('pdfinfo') && lib.have('pdffonts') && lib.have('pdftotext') && lib.have('pdfimages');
+// poppler-utils, not xpdf: Git for Windows ships xpdf's pdftotext, and Git Bash finds it first
+const POPPLER_FOUND = lib.preferPoppler();
+if (!POPPLER_FOUND && lib.have('pdftotext')) console.log('Note: the pdftotext on PATH is not poppler (perhaps xpdf from Git for Windows); install poppler for the PDF checks.');
+const POPPLER = POPPLER_FOUND && lib.have('pdfinfo') && lib.have('pdffonts') && lib.have('pdftotext') && lib.have('pdfimages');
 const PIKEPDF = lib.have('python3') && !/^ERR/.test(lib.sh('python3 -c "import pikepdf"'));
 let skipped = 0;
 function need(avail, what, label, fn) { if (avail) return fn(); console.log('SKIP ' + label + ' (needs ' + what + ')'); skipped++; }
