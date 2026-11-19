@@ -8,15 +8,17 @@ const ROOT = path.join(__dirname, '..');
 const SITE = 'https://sarinityx.github.io/OpenPub/';
 
 function notes(version, rehearsal) {
-  const status = fs.readFileSync(path.join(ROOT, 'docs', 'STATUS.md'), 'utf8').replace(/\r/g, '');
-  const re = new RegExp('^### ' + version.replace(/\./g, '\\.') + '\\b(.*)$', 'm');
-  const m = status.match(re);
-  if (!m && !rehearsal) throw new Error('docs/STATUS.md has no "### ' + version + '" section');
-  if (m && /in progress/i.test(m[1]) && !rehearsal) throw new Error('docs/STATUS.md still calls ' + version + ' "in progress"');
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('version must look like 1.2.3, not "' + version + '"');
+  const lines = fs.readFileSync(path.join(ROOT, 'docs', 'STATUS.md'), 'utf8').replace(/\r/g, '').split('\n');
+  // the "### <version>" heading, matched as plain text (optionally followed by a note such as "(in progress)")
+  const head = '### ' + version, at = lines.findIndex((l) => l === head || l.startsWith(head + ' '));
+  if (at < 0 && !rehearsal) throw new Error('docs/STATUS.md has no "' + head + '" section');
+  if (at >= 0 && /in progress/i.test(lines[at].slice(head.length)) && !rehearsal) throw new Error('docs/STATUS.md still calls ' + version + ' "in progress"');
   let body = '';
-  if (m) {
-    const start = m.index + m[0].length, next = status.slice(start).search(/^#{2,3} /m);
-    body = status.slice(start, next < 0 ? undefined : start + next).trim();
+  if (at >= 0) {
+    let end = lines.findIndex((l, i) => i > at && /^#{2,3} /.test(l));
+    if (end < 0) end = lines.length;
+    body = lines.slice(at + 1, end).join('\n').trim();
   }
   const signed = /^\s*publisherName\s*:/m.test(fs.readFileSync(path.join(ROOT, 'tools', 'package.mjs'), 'utf8'));
   return [
