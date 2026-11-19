@@ -128,6 +128,11 @@ async function checkUninstall(r, deleteData) {
 
 (async () => {
   if (!fs.existsSync(SETUP)) { ok(false, 'installer not found: ' + path.relative(lib.ROOT, SETUP) + ' (run npm run package:win first)'); finish(); }
+  // the files a release publishes: installer, .blockmap, latest.yml (SHA-512 and size of this installer), zip
+  const rf = require('./release-files').verify(path.dirname(SETUP), VERSION);
+  ok(!rf.problems.length, 'release files: ' + rf.files.join(', ') + (rf.problems.length ? '; ' + rf.problems.join('; ') : '; latest.yml matches the installer (' + rf.size + ' bytes)'));
+  const notes = require('./release-notes').notes(VERSION, true);
+  ok(/OpenPub-[\d.]+-win64-setup\.exe/.test(notes) && /code-signing-policy\.html/.test(notes) && /privacy\.html/.test(notes), 'release notes name the installer and link the code signing policy and privacy page');
   if (findUninstall('HKCU') || findUninstall('HKLM')) { skip('installer test: OpenPub is already installed on this computer, and the test would uninstall it'); finish(); }
   const hadData = fs.existsSync(APPDATA_DIR);
   fs.mkdirSync(APPDATA_DIR, { recursive: true });

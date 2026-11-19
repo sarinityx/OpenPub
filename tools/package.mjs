@@ -98,7 +98,7 @@ if (installer && onWindows) {
         uninstallerIcon: path.join(RES, 'icon.ico'),
         include: path.join(RES, 'installer.nsh'),
         artifactName: 'OpenPub-${version}-win64-setup.${ext}',
-        differentialPackage: false, // no auto-update
+        differentialPackage: true, // writes the installer's .blockmap: electron-updater downloads only changed blocks
         packElevateHelper: false
       }
     }

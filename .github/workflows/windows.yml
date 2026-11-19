@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # release.yml runs this same job, so a release is built and tested exactly as CI does
+  workflow_call:
+    inputs:
+      release:
+        description: Upload the release files (installer, blockmap, latest.yml, zip) for the release job
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -111,6 +118,25 @@ jobs:
         with:
           name: OpenPub-installer
           path: desktop/dist/OpenPub-*-win64-setup.exe
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
+      # release.yml only: everything the release needs, checked against latest.yml first
+      - name: Check release files
+        if: ${{ inputs.release }}
+        run: node tools/release-files.js desktop/dist
+
+      - name: Upload release files
+        if: ${{ inputs.release }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: |
+            desktop/dist/OpenPub-*-win64-setup.exe
+            desktop/dist/OpenPub-*-win64-setup.exe.blockmap
+            desktop/dist/latest.yml
+            desktop/dist/OpenPub-*-win64.zip
           retention-days: 7
           compression-level: 0
           if-no-files-found: error
