@@ -14,3 +14,5 @@ Thumbs.db
 
 # private test files (real-world .pub files; never committed)
 test-data/private/
+# website build output (npm run site:build)
+_site/

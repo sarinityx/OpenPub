@@ -463,7 +463,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
       A.loadDoc(doc); A.zoomLabel();
     } });
     buttons.push({ label: 'Open .pub file…', cls: 'primary', fn: function () { $('fileOpen').click(); } });
-    A.modal('OpenPub Poster Studio', body, buttons);
+    A.modal('OpenPub', body, buttons);
   }
 
   // ---------------------------------------------------------------- start-up

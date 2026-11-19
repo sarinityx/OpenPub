@@ -6,6 +6,11 @@ Publisher replacement. Windows desktop app (Electron 45; installer or portable f
 
 ## What is built
 
+### 1.3.0 (in progress)
+- Website in `site/`, deployed to GitHub Pages (`https://sarinityx.github.io/OpenPub/`): home page with download button, screenshots and known limits; FAQ; privacy page (describes the planned update check exactly, and the `DisableUpdateCheck` policy value); code signing policy (SignPath Foundation requirements: build process, team roles, privacy); licence and third-party notices. Search metadata: title and description around "open and edit Microsoft Publisher files", one `h1` per page, canonical URLs, Open Graph image, `SoftwareApplication` JSON-LD (no ratings), `sitemap.xml`, `robots.txt`. The download links come from the latest release at build time; the site rebuilds when a release is published.
+- The product is called OpenPub everywhere; "OpenPub Poster Studio" is retired.
+- Third-party notices: the British English hyphenation patterns are MIT-licensed (hyph-utf8, Dominik Wujastyk and Graham Toal); the notice is now in `app/src/hyph.js`.
+
 ### 1.2.1
 - Fixed: typing in a text box with text wrap turned coloured text black (from 1.2.0's wrap-while-typing).
 - Design checker: keyboard focus stays put when the results refresh; each result says Problem or Note in words; fonts are checked whenever the installed list is known, and the tab says when they were not; a check that fails says so instead of showing old results; the offer before output says when the design changed since the last check.
@@ -60,7 +65,7 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Tested
 
-- 83 desktop end-to-end checks (Electron, clean profile per run), 103 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
+- 83 desktop end-to-end checks (Electron, clean profile per run), 107 browser checks, parser run over the sample files: all pass on Windows 11 (the 4 checks added in 1.2 for a second launch with a file have not been run on Linux).
 - Installer (`npm run test:installer`, Windows): silent install per user and per machine, files, version details, Start menu shortcut, uninstall entry, registry for `.opub` and `.pub`, the `.pub` default left unchanged, a `.opub` opened through Windows starts the installed app, the installed app imports a `.pub`, silent uninstall removes everything it added and keeps settings (or removes them with `--delete-app-data`). Per user run on Windows 11; per machine runs on CI.
 - Windows 11 (17 November 2026): all 76 desktop checks with none skipped, using poppler 25.07, Python 3.13 with pikepdf, and Ghostscript 10.08 found in `Program Files\gs`. The run found one Windows-only test-script bug (single-quoted path), now fixed.
 - Packaged (asar) build smoke-tested on Linux and on Windows, and on every CI run (`tools/smoke-packaged.js`): exe version details, file from command line, ribbon, dictionary, fonts, vector CMYK through Ghostscript, zero network requests, no script errors.

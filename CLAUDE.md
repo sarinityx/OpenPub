@@ -9,12 +9,14 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Install (also installs `desktop/appsrc` dependencies) | `npm install` |
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
-| Browser tests (103 checks, needs Google Chrome) | `npm run test:web` |
+| Browser tests (107 checks, needs Google Chrome) | `npm run test:web` |
 | Desktop tests (83 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
 | Package Windows build, zip and installer into `desktop/dist` | `npm run package:win` |
 | Packaged app smoke test (after `package:win`) | `node tools/smoke-packaged.js` |
 | Installer test (Windows; installs, checks, uninstalls) | `npm run test:installer` |
+| Build and check the website into `_site/` | `npm run site:check` |
+| Retake the website screenshots (Windows, desktop app) | `npm run site:screenshots` |
 
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
@@ -38,8 +40,9 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - `desktop/build/` – Windows icons (`icon.ico`, `opub.ico`, drawn by `tools/make-icons.js`) and `installer.nsh` (file types and the keep-settings question for the electron-builder NSIS installer).
 - `tools/` – build, packaging and test scripts. `tools/lib.js` holds all paths and launch helpers. `tools/debug/` has parser dump scripts.
 - `test-data/publisher/` – sample `.pub` files from Apache POI.
-- `docs/STATUS.md` – what is built, what is tested, known limits, backlog.
-- Generated, not committed: `app/dist/`, `desktop/appsrc/app/`, `desktop/dist/`, `test-out/`.
+- `docs/STATUS.md` – what is built, what is tested, known limits, backlog. `docs/THIRD-PARTY.md` – third-party licences (also the website's licence page).
+- `site/` – the website: `pages/*.html` (fragments with a `<!--page {...} -->` front matter), `assets/style.css`, `img/` (screenshots from `tools/site-screenshots.js`), `verification.json` (search engine verification tags). `tools/build-site.js` adds layout, metadata, JSON-LD, the latest release's download links, `sitemap.xml` and `robots.txt`; `tools/site-check.js` checks the result. `.github/workflows/pages.yml` deploys it to GitHub Pages. No scripts, tracking or remote fonts on the site.
+- Generated, not committed: `app/dist/`, `desktop/appsrc/app/`, `desktop/dist/`, `test-out/`, `_site/`.
 
 ## Architecture rules
 
@@ -59,6 +62,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 ## Conventions
 
 - UI text: Australian English, sentence case, plain words.
+- The product is called "OpenPub" everywhere ("OpenPub Poster Studio" is retired). Say it opens Microsoft Publisher files or is an alternative to Microsoft Publisher; never use "Publisher" as part of OpenPub's name or Microsoft's logos.
 - Version number lives in four places; change all of them for a release: `package.json`, `desktop/appsrc/package.json`, `OP.VERSION` in `app/src/app-plugins.js`, first line of `desktop/README-win.txt`.
 - Add or extend a check in `tools/e2e-desktop.js` (desktop features) or `tools/e2e.js` (editor features) with every feature or fix. Native dialogs are stubbed at the top of `e2e-desktop.js`.
 - The tests pass on Linux and on Windows 11. Shell commands in test scripts must work in both `cmd.exe` and POSIX shells: quote paths with double quotes, not single quotes.

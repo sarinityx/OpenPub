@@ -8,6 +8,8 @@ A desktop page-layout editor that opens Microsoft Publisher (`.pub`) files. Buil
 - Exports PDF (vector, picture, CMYK), PNG, JPEG and SVG; prints through the system print dialog, with n-up, booklet and tiled poster layouts.
 - Tables, linked text boxes, columns, text wrap, hyphenation, WordArt, master pages, mail merge, building blocks, templates, spell check (Australian English), plug-ins and content packs.
 
+Website and download: <https://sarinityx.github.io/OpenPub/>. [Code signing policy](https://sarinityx.github.io/OpenPub/code-signing-policy.html) · [Privacy](https://sarinityx.github.io/OpenPub/privacy.html) · [FAQ](https://sarinityx.github.io/OpenPub/faq.html)
+
 Status, test coverage and known limits: [docs/STATUS.md](docs/STATUS.md).
 
 ## Run from source
@@ -49,6 +51,17 @@ On Linux without a display, run the desktop tests under `xvfb-run -a`. Some PDF 
 | `tools` | Build, packaging and test scripts |
 | `test-data` | Sample `.pub` files |
 | `docs` | Status and third-party notices |
+
+## Website
+
+The website lives in `site/` (plain HTML and CSS, no scripts or tracking) and is deployed to GitHub Pages by `.github/workflows/pages.yml` whenever it changes on `main` or a release is published.
+
+```
+npm run site:check        build into _site/ and check links, metadata and the sitemap
+npm run site:screenshots  retake the screenshots in site/img/ from the desktop app (Windows)
+```
+
+The download button links the newest release's installer: the build reads the latest release from the GitHub API, because the installer's file name contains the version and GitHub's `releases/latest/download/` links need a fixed name.
 
 ## Optional: CMYK output
 
