@@ -662,9 +662,12 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
     ok(look.css === '8px' && look.imgs && siteErrors.length === 0, 'website home page renders with its stylesheet and images, no errors' + (siteErrors.length ? ': ' + siteErrors.join(' | ') : ''));
     await sitePage.close();
     // the product is called OpenPub everywhere (decision of 18 November 2026)
-    const tracked = cp.execFileSync('git', ['ls-files'], { cwd: lib.ROOT, encoding: 'utf8' }).split('\n').filter(f => /\.(js|mjs|html|css|md|json|txt|yml|nsh)$/.test(f));
-    const old = tracked.filter(f => f !== 'tools/e2e.js' && /poster\s+studio/i.test(fs.readFileSync(path.join(lib.ROOT, f), 'utf8')));
-    ok(old.length === 0 && await page.title() !== '' && !/poster studio/i.test(await page.title()), 'no "Poster Studio" left in the repository' + (old.length ? ': ' + old.join(', ') : ''));
+    // everything users see: the app, the desktop shell and its read-me, the installer, the website, the README
+    // (developer notes such as CLAUDE.md and STATUS.md may mention the retired name to say it is retired)
+    const shown = cp.execFileSync('git', ['ls-files', 'app', 'desktop', 'site', 'README.md', 'package.json'], { cwd: lib.ROOT, encoding: 'utf8' }).split('\n')
+      .filter(f => /\.(js|mjs|html|css|md|json|txt|nsh)$/.test(f) && !/\/dict\//.test(f));
+    const old = shown.filter(f => /poster\s+studio/i.test(fs.readFileSync(path.join(lib.ROOT, f), 'utf8')));
+    ok(shown.length > 20 && old.length === 0 && await page.title() !== '' && !/poster studio/i.test(await page.title()), 'no "Poster Studio" in anything users see (' + shown.length + ' files)' + (old.length ? ': ' + old.join(', ') : ''));
   }
 
   // ---- a bad file gives a readable error, not a crash
