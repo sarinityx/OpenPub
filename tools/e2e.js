@@ -658,8 +658,15 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
     sitePage.on('console', m => { if (m.type() === 'error') siteErrors.push(m.text()); });
     sitePage.on('pageerror', e => siteErrors.push(e.message));
     await sitePage.goto(lib.fileUrl(path.join(siteOut, 'index.html')));
-    const look = await sitePage.evaluate(() => ({ css: getComputedStyle(document.querySelector('.button')).borderRadius, imgs: Array.from(document.images).every(i => i.complete && i.naturalWidth > 0) }));
-    ok(look.css === '8px' && look.imgs && siteErrors.length === 0, 'website home page renders with its stylesheet and images, no errors' + (siteErrors.length ? ': ' + siteErrors.join(' | ') : ''));
+    const look = await sitePage.evaluate(async () => {
+      // the gallery images are loading="lazy" and below the fold: load them all before checking
+      const imgs = Array.from(document.images);
+      imgs.forEach(i => { i.loading = 'eager'; });
+      await Promise.all(imgs.map(i => i.decode().catch(() => null)));
+      return { css: getComputedStyle(document.querySelector('.button')).borderRadius, broken: imgs.filter(i => !(i.naturalWidth > 0)).map(i => i.getAttribute('src')), n: imgs.length };
+    });
+    ok(look.css === '8px' && look.n >= 4 && !look.broken.length && siteErrors.length === 0, 'website home page renders with its stylesheet and ' + look.n + ' images, no errors' +
+      (look.css !== '8px' ? '; stylesheet not applied (' + look.css + ')' : '') + (look.broken.length ? '; not loaded: ' + look.broken.join(', ') : '') + (siteErrors.length ? '; ' + siteErrors.join(' | ') : ''));
     await sitePage.close();
     // the product is called OpenPub everywhere (decision of 18 November 2026)
     // everything users see: the app, the desktop shell and its read-me, the installer, the website, the README
