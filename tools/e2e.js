@@ -18,7 +18,7 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   page.on('dialog', d => d.accept());
   await page.goto(APP);
   await page.waitForSelector('#modal.open');
-  ok(await page.locator('.dlg header').innerText() === 'OpenPub Poster Studio', 'welcome dialog shown');
+  ok(await page.locator('.dlg header').innerText() === 'OpenPub', 'welcome dialog shown');
   await page.screenshot({ path: path.join(OUT, '01-welcome.png') });
 
   // ---- open a .pub through the file chooser
@@ -640,6 +640,32 @@ function ok(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!con
   await page.keyboard.press('Escape');
   await page.evaluate(() => { OP.app.S.dirty = false; });
   await page.evaluate(() => { OP.app.S.dirty = false; });
+
+  // ---- website (site/): build with a fixed release, then links, metadata, sitemap and the download button
+  {
+    const cp = require('child_process'), siteOut = path.join(OUT, 'site'), relFile = path.join(OUT, 'site-release.json');
+    fs.writeFileSync(relFile, JSON.stringify({ tag_name: 'v9.8.7', published_at: '2026-11-19T00:00:00Z', html_url: 'https://github.com/sarinityx/OpenPub/releases/tag/v9.8.7',
+      assets: [{ name: 'OpenPub-9.8.7-win64-setup.exe', browser_download_url: 'https://github.com/sarinityx/OpenPub/releases/download/v9.8.7/OpenPub-9.8.7-win64-setup.exe' },
+        { name: 'OpenPub-9.8.7-win64.zip', browser_download_url: 'https://github.com/sarinityx/OpenPub/releases/download/v9.8.7/OpenPub-9.8.7-win64.zip' }] }));
+    cp.execFileSync(process.execPath, [path.join(lib.ROOT, 'tools', 'build-site.js'), '--out', siteOut, '--release', relFile], { stdio: 'pipe' });
+    const sc = require('./site-check').check(siteOut);
+    ok(sc.problems.length === 0 && sc.pages >= 6, 'website: ' + sc.pages + ' pages, links, one h1 each, alt text, JSON-LD and sitemap check out' + (sc.problems.length ? ': ' + sc.problems.slice(0, 4).join(' | ') : ''));
+    const home = fs.readFileSync(path.join(siteOut, 'index.html'), 'utf8');
+    ok(/<a class="button" href="https:\/\/github.com\/sarinityx\/OpenPub\/releases\/download\/v9\.8\.7\/OpenPub-9\.8\.7-win64-setup\.exe">/.test(home) && /Version 9\.8\.7, released 19 November 2026/.test(home) &&
+      /href="code-signing-policy\.html"/.test(home) && /href="privacy\.html"/.test(home) && /not affiliated with/.test(home),
+      'website home page: download button for the latest installer, version, code signing policy and privacy links, trademark note');
+    const sitePage = await ctx.newPage(), siteErrors = [];
+    sitePage.on('console', m => { if (m.type() === 'error') siteErrors.push(m.text()); });
+    sitePage.on('pageerror', e => siteErrors.push(e.message));
+    await sitePage.goto(lib.fileUrl(path.join(siteOut, 'index.html')));
+    const look = await sitePage.evaluate(() => ({ css: getComputedStyle(document.querySelector('.button')).borderRadius, imgs: Array.from(document.images).every(i => i.complete && i.naturalWidth > 0) }));
+    ok(look.css === '8px' && look.imgs && siteErrors.length === 0, 'website home page renders with its stylesheet and images, no errors' + (siteErrors.length ? ': ' + siteErrors.join(' | ') : ''));
+    await sitePage.close();
+    // the product is called OpenPub everywhere (decision of 18 November 2026)
+    const tracked = cp.execFileSync('git', ['ls-files'], { cwd: lib.ROOT, encoding: 'utf8' }).split('\n').filter(f => /\.(js|mjs|html|css|md|json|txt|yml|nsh)$/.test(f));
+    const old = tracked.filter(f => f !== 'tools/e2e.js' && /poster\s+studio/i.test(fs.readFileSync(path.join(lib.ROOT, f), 'utf8')));
+    ok(old.length === 0 && await page.title() !== '' && !/poster studio/i.test(await page.title()), 'no "Poster Studio" left in the repository' + (old.length ? ': ' + old.join(', ') : ''));
+  }
 
   // ---- a bad file gives a readable error, not a crash
   await page.evaluate(() => { OP.app.S.dirty = false; });

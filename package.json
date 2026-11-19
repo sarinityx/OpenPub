@@ -16,6 +16,9 @@
     "smoke": "node tools/build.js && node tools/smoke.js",
     "package:win": "node tools/package.mjs win32",
     "test:installer": "node tools/e2e-installer.js",
+    "site:build": "node tools/build-site.js",
+    "site:check": "node tools/build-site.js && node tools/site-check.js",
+    "site:screenshots": "node tools/build.js && node tools/site-screenshots.js",
     "package:linux": "node tools/package.mjs linux"
   },
   "devDependencies": {

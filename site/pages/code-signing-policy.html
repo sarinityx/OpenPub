@@ -1,0 +1,39 @@
+<!--page {"path": "code-signing-policy.html", "title": "Code signing policy – OpenPub", "description": "How OpenPub releases are built from the public source code, who can change and approve them, and the plan to sign them through SignPath Foundation.", "nav": "signing"} -->
+<div class="wrap page">
+  <h1>Code signing policy</h1>
+  <p>This page says how OpenPub's Windows releases are built, who is responsible for them, and how they are signed.</p>
+
+  <h2 id="status">Signing status</h2>
+  <p>OpenPub releases are not yet code-signed. OpenPub is applying to <a href="https://signpath.org">SignPath Foundation</a> for free code signing for open-source projects. Once the project is accepted, signed releases will carry this statement:</p>
+  <p class="note">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+  <p>The publisher shown by Windows for a signed release will be "SignPath Foundation". Until then, Windows SmartScreen may warn the first time you run the installer; see the <a href="faq.html#smartscreen">FAQ</a>.</p>
+
+  <h2 id="what">What is signed</h2>
+  <ul>
+    <li><code>OpenPub.exe</code>, the program itself</li>
+    <li>The installer, <code>OpenPub-&lt;version&gt;-win64-setup.exe</code>, and its uninstaller where possible</li>
+  </ul>
+  <p>Only files built from OpenPub's own source code are signed. Electron's files that ship with the app are included unchanged from the Electron project.</p>
+
+  <h2 id="build">How releases are built</h2>
+  <ul>
+    <li>All source code, build scripts and build settings are public, in the <a href="{{repoUrl}}">sarinityx/OpenPub</a> repository under the MIT licence.</li>
+    <li>Release files are built by GitHub Actions on GitHub-hosted runners, from the repository, by the release workflow. They are not built on a personal computer.</li>
+    <li>Every change reaches the main branch through a pull request that must pass the automated tests. Direct pushes and history rewrites are blocked.</li>
+    <li>Every signing request is approved by hand before anything is signed.</li>
+    <li>Published releases cannot be changed afterwards: release files and tags are immutable on GitHub. A mistake is fixed with a new version.</li>
+  </ul>
+
+  <h2 id="team">Team roles</h2>
+  <ul>
+    <li><b>Committers and reviewers:</b> <a href="https://github.com/sarinityx">sarinityx</a> (project owner)</li>
+    <li><b>Approvers:</b> <a href="https://github.com/sarinityx">sarinityx</a> (project owner)</li>
+  </ul>
+  <p>Changes proposed by anyone else are reviewed by the owner before they are merged. Everyone on the team uses multi-factor authentication for GitHub and SignPath.</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <p>OpenPub sends no information to other networked systems unless the user or the person managing it asks it to: the only such request is the optional update check. Details are on the <a href="privacy.html">privacy page</a>.</p>
+
+  <h2 id="verify">Checking a signature</h2>
+  <p>For a signed release, right-click the installer or <code>OpenPub.exe</code> in File Explorer, choose <b>Properties</b>, then the <b>Digital Signatures</b> tab. The signer should be SignPath Foundation.</p>
+</div>

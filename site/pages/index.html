@@ -1,0 +1,80 @@
+<!--page {"path": "", "title": "OpenPub – open and edit Microsoft Publisher (.pub) files, free for Windows", "description": "OpenPub is a free, open-source Windows app that opens Microsoft Publisher .pub files and lets you edit, print and export them as PDF, entirely offline. An alternative to Microsoft Publisher.", "nav": "home", "jsonld": "software"} -->
+<div class="wrap">
+  <div class="hero">
+    <h1>OpenPub: open and edit Microsoft Publisher files</h1>
+    <p class="lead">OpenPub is a free, open-source Windows app that opens Microsoft Publisher (<code>.pub</code>) files and lets you edit, print and export them as PDF, entirely on your computer. It is an alternative to Microsoft Publisher, which Microsoft retired in October 2026.</p>
+    <div class="actions">
+      <a class="button" href="{{installerUrl}}">Download OpenPub for Windows</a>
+      <p class="meta">Version {{version}}, released {{releaseDate}}. Windows 10 and 11, 64-bit. Free and open source (MIT licence).</p>
+    </div>
+    <p class="meta">Also available: the <a href="{{zipUrl}}">portable zip</a> (no installation) and <a href="{{releasesUrl}}">all releases</a>. Read the <a href="code-signing-policy.html">code signing policy</a> and <a href="privacy.html">privacy</a> page.</p>
+    <figure class="shot">
+      <img src="img/newsletter.png" width="1440" height="900" alt="OpenPub showing a four-page school newsletter imported from a Publisher file: the page with its headline, photo and text columns in the middle, page thumbnails on the left and the formatting panel on the right.">
+      <figcaption>A newsletter made in Microsoft Publisher, opened in OpenPub.</figcaption>
+    </figure>
+  </div>
+
+  <section id="opens">
+    <h2>What OpenPub opens and keeps</h2>
+    <div class="cols">
+      <ul>
+        <li><code>.pub</code> files from Publisher 2002, 2003, 2007, 2010, 2013, 2016, 2019, 2021 and Microsoft 365</li>
+        <li>Text boxes with their fonts, colours, spacing, bullets and columns, and linked text boxes in their original order</li>
+        <li>Tables, master pages and WordArt</li>
+      </ul>
+      <ul>
+        <li>Pictures (PNG, JPEG, and most WMF and EMF artwork), shapes, lines, gradients, rotation and groups</li>
+        <li>Page backgrounds and the colours of the publication's colour scheme</li>
+        <li>An import report that says what was changed on the way in</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="features">
+    <h2>What you can do with it</h2>
+    <div class="cols">
+      <ul>
+        <li>Edit text in place, with spelling in Australian English and British hyphenation</li>
+        <li>Move, align and space objects; text wraps around pictures and shapes</li>
+        <li>Mail merge from a CSV file or cells pasted from Excel; building blocks and templates</li>
+        <li>Check the design before printing: text that doesn't fit, low-resolution pictures, missing fonts</li>
+      </ul>
+      <ul>
+        <li>Export PDF (vector, or CMYK for print shops), PNG, JPEG and SVG</li>
+        <li>Print through Windows, or lay out several copies per sheet, booklets and tiled posters</li>
+        <li>Save your work as an OpenPub project (<code>.opub</code>)</li>
+        <li>Everything happens on your computer: no account and no uploads</li>
+      </ul>
+    </div>
+    <div class="gallery">
+      <figure>
+        <img src="img/check.png" width="1440" height="900" loading="lazy" alt="The design checker in OpenPub's side panel listing problems by page, such as text that does not fit its box and a line partly off the page.">
+        <figcaption>The design checker finds problems before you print.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/print-preview.png" width="1440" height="900" loading="lazy" alt="OpenPub's Print layouts dialog previewing a folded booklet sheet with page 4 on the left and page 1 on the right.">
+        <figcaption>Print layouts shows each sheet before it goes to the printer, here as a booklet.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="why">
+    <h2>Why OpenPub</h2>
+    <p>Most programs suggested as replacements for Publisher, such as Canva, Adobe InDesign and Affinity Publisher, cannot open <code>.pub</code> files. LibreOffice Draw and Scribus can import them, then work with them as general drawings or layouts. OpenPub is built for Publisher documents: it keeps tables as tables, linked text boxes as linked text, and master pages as master pages, and it works offline.</p>
+  </section>
+
+  <section id="limits">
+    <h2>Known limits</h2>
+    <ul>
+      <li>OpenPub cannot save <code>.pub</code> files. The format is undocumented, so your work is saved as an <code>.opub</code> project and exported as PDF or pictures. The original <code>.pub</code> file is never changed.</li>
+      <li>Files from Publisher 98 and Publisher 2000 cannot be opened.</li>
+      <li>OpenPub runs on Windows only.</li>
+      <li>Some things are simplified on import: decorative BorderArt becomes a plain frame in its colour and width, and WordArt is placed letter by letter rather than bent.</li>
+      <li>Vector CMYK PDF needs Ghostscript, which is free but installed separately.</li>
+    </ul>
+    <div class="note">
+      <p>The installer is not yet code-signed, so Windows SmartScreen may warn the first time you run it. Choose <b>More info</b>, then <b>Run anyway</b>. The <a href="code-signing-policy.html">code signing policy</a> explains how releases are built and the plan to sign them.</p>
+    </div>
+    <p>More answers are in the <a href="faq.html">frequently asked questions</a>.</p>
+  </section>
+</div>

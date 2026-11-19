@@ -1,0 +1,48 @@
+<!--page {"path": "faq.html", "title": "OpenPub FAQ – opening .pub files now Microsoft Publisher is retired", "description": "Answers about OpenPub: how to open a .pub file without Microsoft Publisher, whether it is free, saving .pub files, update checks, SmartScreen warnings and turning off updates in an organisation.", "nav": "faq"} -->
+<div class="wrap page">
+  <h1>Frequently asked questions</h1>
+
+  <h2 id="open-pub">How do I open a .pub file now Publisher is retired?</h2>
+  <p>Install OpenPub, then open the <code>.pub</code> file from <b>File › Open</b>, by dragging it onto the window, or by right-clicking it in File Explorer and choosing <b>Open with › OpenPub</b>. OpenPub reads files from Publisher 2002 to 2021 and Microsoft 365. After opening, a short report lists anything that was changed on the way in.</p>
+
+  <h2 id="free">Is OpenPub free?</h2>
+  <p>Yes. OpenPub is free to download and use, including at work, and its source code is open under the MIT licence. There are no accounts, subscriptions or advertising.</p>
+
+  <h2 id="save-pub">Does OpenPub save .pub files?</h2>
+  <p>No. Microsoft has not published the <code>.pub</code> format, so OpenPub reads it but does not write it. Your work is saved as an OpenPub project (<code>.opub</code>), and you can export PDF, PNG, JPEG and SVG. The original <code>.pub</code> file is never changed.</p>
+
+  <h2 id="old-versions">Which Publisher files can it open?</h2>
+  <p>Files from Publisher 2002, 2003, 2007, 2010, 2013, 2016, 2019, 2021 and Microsoft 365. Files from Publisher 98 and Publisher 2000 use an older format and cannot be opened.</p>
+
+  <h2 id="offline">Are my files uploaded anywhere?</h2>
+  <p>No. OpenPub opens, edits and exports everything on your computer and works without an internet connection. The <a href="privacy.html">privacy page</a> describes the one optional network request: checking for a new version.</p>
+
+  <h2 id="installer-or-zip">Should I use the installer or the portable zip?</h2>
+  <p>The installer adds OpenPub to the Start menu, opens <code>.opub</code> projects when you double-click them and offers OpenPub for <code>.pub</code> files, without changing your default program for them. You can install it just for yourself (no administrator rights needed) or for everyone on the computer. The portable zip needs no installation: unzip it anywhere and run <code>OpenPub.exe</code>.</p>
+
+  <h2 id="smartscreen">Why does Windows warn me when I run the installer?</h2>
+  <p>OpenPub's releases are not yet code-signed, so Windows SmartScreen does not recognise the publisher. Choose <b>More info</b>, then <b>Run anyway</b>. The <a href="code-signing-policy.html">code signing policy</a> explains how releases are built from the public source code and the plan to sign them.</p>
+
+  <h2 id="updates">Does OpenPub update itself?</h2>
+  <p>From version 1.3.0, OpenPub can check for new versions. The first time it starts, it asks whether to check automatically, and it makes no update check until you answer yes. You can change your answer later, and <b>Check for updates</b> works at any time. When a new version is found, OpenPub asks before downloading it. The portable zip only tells you a new version is available and links to the download page. The Microsoft Store version is updated by the Store.</p>
+
+  <h2 id="it-policy">Can my IT department turn off update checks?</h2>
+  <p>Yes. From version 1.3.0, set this registry value, for example through Group Policy preferences:</p>
+  <p><code>HKEY_LOCAL_MACHINE\SOFTWARE\Policies\OpenPub</code>, value <code>DisableUpdateCheck</code>, type <code>REG_DWORD</code>, data <code>1</code>.</p>
+  <p>OpenPub then makes no update checks at all, does not ask about them, and its <b>Check for updates</b> command says updates are managed by your organisation. For unattended installs, the installer accepts <code>/S /allusers</code> (everyone on the computer, run as administrator) or <code>/S /currentuser</code>.</p>
+
+  <h2 id="fonts">The text looks different from Publisher. Why?</h2>
+  <p>OpenPub uses the fonts installed on your computer. If a publication uses a font you don't have, another font is used in its place and the import report and the design checker list it. Installing the font fixes it.</p>
+
+  <h2 id="cmyk">Can I send a CMYK PDF to a print shop?</h2>
+  <p>Yes. Vector CMYK PDF needs Ghostscript, which is free but not included with OpenPub because of its licence. Install it from ghostscript.com and OpenPub finds it automatically; you can also choose the colour profile your printer asks for.</p>
+
+  <h2 id="mac-linux">Is there a Mac or Linux version?</h2>
+  <p>Not at the moment. OpenPub is released for Windows 10 and 11 (64-bit).</p>
+
+  <h2 id="uninstall">How do I uninstall OpenPub?</h2>
+  <p>Open Windows <b>Settings › Apps</b>, find OpenPub and choose <b>Uninstall</b>. It asks whether to keep your settings and personal dictionary. For the portable zip, delete its folder.</p>
+
+  <h2 id="report">Where do I report a problem?</h2>
+  <p>Open an issue on <a href="{{repoUrl}}/issues">GitHub</a>. For a security problem, please report it privately through <a href="{{repoUrl}}/security">the repository's Security tab</a> instead.</p>
+</div>
