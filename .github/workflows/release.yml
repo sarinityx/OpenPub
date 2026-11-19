@@ -1,0 +1,114 @@
+name: Release
+
+# Makes a DRAFT release of the version in desktop/appsrc/package.json. Start it by hand on main after the
+# version bump is merged (Actions > Release > Run workflow). The owner checks the draft and publishes it;
+# publishing creates the tag. Releases are immutable once published: a broken release is fixed by a new version.
+#
+#   rehearsal: builds and publishes a draft tagged v<version>-rehearsal.<run>, marked "do not publish".
+#              Check it, then delete it. Never publish a rehearsal.
+on:
+  workflow_dispatch:
+    inputs:
+      rehearsal:
+        description: Rehearsal (draft marked do-not-publish; delete it afterwards)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: v
+        name: Version, tag and release notes can be made
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REHEARSAL: ${{ inputs.rehearsal }}
+        run: |
+          set -eu
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "::error::Run the release workflow on main (this run: $GITHUB_REF)"; exit 1; fi
+          version=$(node -p "require('./desktop/appsrc/package.json').version")
+          for f in package.json; do
+            v=$(node -p "require('./$f').version"); [ "$v" = "$version" ] || { echo "::error::$f says $v, desktop/appsrc/package.json says $version"; exit 1; }
+          done
+          grep -q "OP.VERSION = '$version'" app/src/app-plugins.js || { echo "::error::OP.VERSION in app/src/app-plugins.js is not $version"; exit 1; }
+          head -1 desktop/README-win.txt | grep -q "^OpenPub $version " || { echo "::error::desktop/README-win.txt does not start with OpenPub $version"; exit 1; }
+          if [ "$REHEARSAL" = "true" ]; then
+            tag="v$version-rehearsal.$GITHUB_RUN_NUMBER"
+            node tools/release-notes.js "$version" --rehearsal > /dev/null
+          else
+            tag="v$version"
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2>&1; then echo "::error::Tag $tag already exists: bump the version first"; exit 1; fi
+            node tools/release-notes.js "$version" > /dev/null
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release $tag from $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Exactly the CI job: every test, the package, the smoke and installer tests. Uploads the release files.
+  build:
+    needs: check
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows.yml
+    with:
+      release: true
+
+  # Item 5 (code signing through SignPath Foundation) adds its jobs here, between build and publish:
+  # sign OpenPub.exe, build the installer from the signed folder, sign the installer, rebuild latest.yml
+  # and the blockmap. Each signing request waits for the owner's approval in SignPath.
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the only job that can write: it creates the draft release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: release-files
+
+      - name: Check the files against latest.yml
+        run: node tools/release-files.js release-files "${{ needs.check.outputs.version }}"
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          TAG: ${{ needs.check.outputs.tag }}
+          REHEARSAL: ${{ inputs.rehearsal }}
+        run: |
+          set -eu
+          if [ "$REHEARSAL" = "true" ]; then
+            node tools/release-notes.js "$VERSION" --rehearsal > notes.md; title="REHEARSAL OpenPub $VERSION (do not publish)"
+          else
+            node tools/release-notes.js "$VERSION" > notes.md; title="OpenPub $VERSION"
+          fi
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$title" --notes-file notes.md \
+            "release-files/OpenPub-$VERSION-win64-setup.exe" \
+            "release-files/OpenPub-$VERSION-win64-setup.exe.blockmap" \
+            "release-files/latest.yml" \
+            "release-files/OpenPub-$VERSION-win64.zip"
+          url=$(gh release view "$TAG" --json url --jq .url)
+          {
+            echo "## Draft release ready"
+            echo
+            echo "[$title]($url): check it, then publish it (publishing creates the tag $TAG)."
+            [ "$REHEARSAL" = "true" ] && echo "This is a rehearsal: delete the draft, never publish it."
+          } >> "$GITHUB_STEP_SUMMARY"
