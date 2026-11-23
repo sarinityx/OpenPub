@@ -38,9 +38,14 @@ WHAT IT SAVES
 
 PRIVACY
   Files are processed on this computer. The app makes no internet connections,
-  except that Windows may download a spelling dictionary for the red underlines
-  if the English (Australia) language pack is not installed. The Tools >
-  Spelling checker uses a dictionary bundled in the app and works offline.
+  with one exception: checking GitHub for a new version. On first start OpenPub
+  asks "Check for updates automatically?" and checks nothing until you say yes;
+  then once a day at most. File > Check for updates checks once when you ask.
+  It sends no information about you or your files. Organisations can turn
+  checks off: DisableUpdateCheck = 1 (REG_DWORD) under
+  HKEY_LOCAL_MACHINE\SOFTWARE\Policies\OpenPub. Windows may also download a
+  spelling dictionary for the red underlines if the English (Australia)
+  language pack is not installed. Details: sarinityx.github.io/OpenPub/privacy.html
 
 FONTS
   Every font installed on this computer is in the font list automatically.

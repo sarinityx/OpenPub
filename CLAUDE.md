@@ -10,7 +10,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 | Build the single-file editor | `npm run build` |
 | Run the desktop app from source | `npm start` |
 | Browser tests (107 checks, needs Google Chrome) | `npm run test:web` |
-| Desktop tests (83 checks) | `npm run test:desktop` |
+| Desktop tests (95 checks) | `npm run test:desktop` |
 | Render every sample `.pub` to PNG (`test-out/parser`) | `npm run test:parser` |
 | Package Windows build, zip and installer into `desktop/dist` | `npm run package:win` |
 | Packaged app smoke test (after `package:win`) | `node tools/smoke-packaged.js` |
@@ -21,7 +21,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - Node 22.12 or later (the packager requires it).
 - Linux without a display: prefix desktop tests with `xvfb-run -a`.
 - Chrome not found: set `CHROME_PATH` to the Chrome executable.
-- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 83 checks, 0 skipped.
+- Desktop tests print `SKIP` for checks that need tools that are not installed: poppler-utils (`pdfinfo`, `pdffonts`, `pdftotext`, `pdfimages`), Python 3 with `pikepdf`, Ghostscript (on PATH, or on Windows in `Program Files\gs`). With all of them: 95 checks, 0 skipped.
 - Windows: the tests call `python3` by name, which the python.org installer does not provide. Use the Microsoft Store Python (`winget install 9PNRBTZXMB4Z`), then `python3 -m pip install pikepdf`. poppler: `winget install oschwartz10612.Poppler`.
 - Git for Windows ships xpdf's `pdftotext`/`pdfinfo` in `ucrt64/bin`, which Git Bash puts ahead of poppler on PATH. xpdf orders text differently and breaks the PDF text checks, so the desktop tests move poppler's folder to the front themselves (`preferPoppler` in `tools/lib.js`) and skip the PDF checks if only xpdf is installed.
 - The font drop-down checks pick from whatever fonts are installed; no particular font is needed.
@@ -36,7 +36,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 
 - `app/src/` – editor and `.pub` parser. Plain JavaScript, no framework, no bundler. Every module adds to the global `OP`; app state is `OP.app`.
 - `app/src/index.template.html` – page shell and all CSS. `tools/build.js` inlines the modules at `/*__SCRIPTS__*/`.
-- `desktop/appsrc/` – Electron shell: `main.js`, `preload.js` (bridge `window.openpubDesktop`, seen by the editor as `OP.desktop`), `pdfblack.js`, `dict/` (en-AU spelling).
+- `desktop/appsrc/` – Electron shell: `main.js`, `preload.js` (bridge `window.openpubDesktop`, seen by the editor as `OP.desktop`), `updater.js` (update checks, electron-updater), `pdfblack.js`, `dict/` (en-AU spelling).
 - `desktop/examples/` – sample plug-in, sample content pack, `PLUGINS.md` (plug-in API reference). Shipped with the app.
 - `desktop/build/` – Windows icons (`icon.ico`, `opub.ico`, drawn by `tools/make-icons.js`) and `installer.nsh` (file types and the keep-settings question for the electron-builder NSIS installer).
 - `tools/` – build, packaging and test scripts. `tools/lib.js` holds all paths and launch helpers. `tools/debug/` has parser dump scripts.
@@ -48,12 +48,13 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 ## Architecture rules
 
 - Module order is fixed in `tools/build.js` (`ORDER`). A new module must be added there.
-  `util, cfb, model, geometry, wmf, emf, layout, hyph, flow, wrap, table, wordart, pub, pubconv, render, export, app-core, app-input, app-text, app-panels, app-extra, app-print, app-ribbon, app-plugins, app-main, app-check`
-  `app-check` comes last because it wraps the export and print dialogs defined in `app-main`.
+  `util, cfb, model, geometry, wmf, emf, layout, hyph, flow, wrap, table, wordart, pub, pubconv, render, export, app-core, app-input, app-text, app-panels, app-extra, app-print, app-ribbon, app-plugins, app-main, app-check, app-update`
+  `app-check` comes after `app-main` because it wraps the export and print dialogs defined there; `app-update` (the update question and notice, desktop only) is last.
 - A new item type or item field must be handled in four places: model normalisation (`normItem` / `normText` in `model.js`), canvas renderer (`render.js`), SVG exporter (`OP.pageToSvg` in `export.js`) and the undo snapshot (`app-core.js`). Missing one gives a feature that draws but does not export, or is lost on undo or reload.
 - Geometry is in points everywhere. The UI shows millimetres (`OP.MM`).
 - The editor must keep working as a plain web page: guard desktop-only features with `if (OP.desktop)`.
-- The desktop app makes no network requests. `tools/build.js` strips the web-font links from the desktop copy; do not add remote resources.
+- Network: the desktop app makes no network requests, except update checks to GitHub (`desktop/appsrc/updater.js`), and only when the user has said yes to them on first start or chooses Check for updates, never when the admin policy turns them off (`DisableUpdateCheck` = 1, `REG_DWORD`, under `HKLM` or `HKCU\SOFTWARE\Policies\OpenPub`). Opening a hyperlink in the user's browser is not a request by the app. `tools/build.js` strips the web-font links from the desktop copy; do not add remote resources. Update this rule, the privacy page (`site/pages/privacy.html`) and `desktop/README-win.txt` together.
+- Updates: electron-updater (GitHub provider) for NSIS installs only. `tools/package.mjs` writes `resources/app-update.yml` (electron-builder skips it for a prepackaged folder). Modes: installed (an `Uninstall OpenPub.exe` beside the exe) downloads and installs; portable (the zip) only shows a notice with the release page; Store (`process.windowsStore`) and source runs have no updater. Signature checking stays off (no `publisherName`, `verifyUpdateCodeSignature: false`) until the first signed release. Test hooks are `OPENPUB_TEST_UPDATE_*` environment variables, listed at the top of `updater.js`.
 - Electron security: `contextIsolation` and `sandbox` stay on. New native features go through `preload.js` → `ipcMain` handlers. `file:save` only writes to a path the user chose in a dialog this session (`knownPaths` in `main.js`); keep that.
 - No `</script` inside any module (the build rejects it).
 - `.pub` is read-only: the format is undocumented, so there is no `.pub` writer. Projects save as `.opub` (JSON).

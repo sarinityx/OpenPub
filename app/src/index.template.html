@@ -230,6 +230,13 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .shpv-nav { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
 .shpv-nav .btn { min-width: 30px; }
 .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
+/* update notice (desktop): non-modal, bottom right */
+.updnote { position: fixed; right: 16px; bottom: 40px; z-index: 110; width: min(380px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; box-shadow: 0 12px 36px var(--shadow); padding: 12px 14px; font-size: 13px; }
+.updnote p { margin: 0 0 8px; }
+.updnote .updtitle { font-weight: 600; font-size: 14px; }
+.updnote .updbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.updnote .progress { margin: 4px 0 6px; }
+.updauto { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 #toasts { position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 120; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
 .toast { background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 7px; box-shadow: 0 8px 22px var(--shadow); max-width: min(560px, 90vw); }
 .toast.err { background: var(--warn); color: #fff; }

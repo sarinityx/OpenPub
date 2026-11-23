@@ -42,6 +42,7 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
     rPlugin: '<path d="M9 3v4M15 3v4"/><path d="M6 7h12v5a6 6 0 0 1-12 0z"/><path d="M12 18v3"/>',
     rHelp: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17v.2"/>',
     rInfo: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.2"/>',
+    rUpdate: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4.5h-4.5"/><path d="M12 8v5l3 2"/>',
     rSun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
     rMoon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
     rAuto: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
@@ -109,7 +110,8 @@ var OP = (typeof globalThis.OP !== 'undefined') ? globalThis.OP : (globalThis.OP
             { id: 'rbTile', icon: 'rTile', label: 'Tiled poster', tip: 'Print a large poster across several sheets', fn: function () { A.dlgTile(); } }]] },
         { title: 'Help', items: [[
           { id: 'rbKeys', icon: 'rHelp', label: 'Shortcuts and tips', fn: function () { A.dlgHelp(); } },
-          { id: 'rbAbout', icon: 'rInfo', label: 'What works and what does not', fn: function () { A.dlgAbout(); } }]] }] },
+          { id: 'rbAbout', icon: 'rInfo', label: 'What works and what does not', fn: function () { A.dlgAbout(); } },
+          desk ? { id: 'rbUpdates', icon: 'rUpdate', label: 'Check for updates', tip: 'Check GitHub for a new version of OpenPub now', fn: function () { A.checkForUpdates(); } } : null]] }] },
       { id: 'home', label: 'Home', groups: [
         { title: 'Clipboard', items: [
           { id: 'rbPaste', icon: 'rPaste', label: 'Paste', lg: true, tip: 'Paste (Ctrl+V)', fn: function () { A.paste(); } },

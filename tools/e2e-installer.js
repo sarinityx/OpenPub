@@ -112,6 +112,85 @@ async function checkInstall(mode) {
   return { dir, exe, root, un, startMenu, label };
 }
 
+// ---- updating version N to N+1 through electron-updater, from a local feed (the test hooks in updater.js)
+const NEXT = VERSION.replace(/(\d+)$/, (m, p) => String(+p + 1));
+let feed = null;
+/** Builds N+1 once (into test-out) and serves it with N's blockmap; electron-updater asks for single byte ranges. */
+async function startFeed() {
+  if (feed) return feed;
+  const nextOut = path.join(OUT, 'next');
+  fs.rmSync(nextOut, { recursive: true, force: true });
+  cp.execFileSync(process.execPath, [path.join(lib.ROOT, 'tools', 'package.mjs'), 'win32', '--no-zip', '--version', NEXT, '--out', nextOut], { stdio: 'ignore', timeout: 900000 });
+  const dir = path.join(OUT, 'feed');
+  fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+  for (const f of ['latest.yml', 'OpenPub-' + NEXT + '-win64-setup.exe', 'OpenPub-' + NEXT + '-win64-setup.exe.blockmap']) fs.copyFileSync(path.join(nextOut, f), path.join(dir, f));
+  fs.copyFileSync(SETUP + '.blockmap', path.join(dir, path.basename(SETUP) + '.blockmap'));
+  const requests = [];
+  const server = require('http').createServer((req, res) => {
+    requests.push(req.method + ' ' + req.url + (req.headers.range ? ' ' + req.headers.range : ''));
+    const f = path.join(dir, path.basename(decodeURIComponent(req.url.split('?')[0])));
+    if (!fs.existsSync(f)) { res.statusCode = 404; res.end(); return; }
+    const size = fs.statSync(f).size, m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+    if (m) {
+      const a = +m[1], b = m[2] ? Math.min(+m[2], size - 1) : size - 1;
+      res.writeHead(206, { 'Content-Range': 'bytes ' + a + '-' + b + '/' + size, 'Content-Length': b - a + 1, 'Accept-Ranges': 'bytes' });
+      fs.createReadStream(f, { start: a, end: b }).pipe(res);
+    } else {
+      res.writeHead(200, { 'Content-Length': size, 'Accept-Ranges': 'bytes' });
+      fs.createReadStream(f).pipe(res);
+    }
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  feed = { url: 'http://127.0.0.1:' + server.address().port + '/', requests, close: () => server.close() };
+  return feed;
+}
+
+async function checkUpdate(r) {
+  const f = await startFeed(), label = r.label;
+  const profile = path.join(OUT, 'profile-' + (r.root === 'HKLM' ? 'machine' : 'user'));
+  fs.rmSync(profile, { recursive: true, force: true });
+  const logFile = path.join(OUT, 'updater-' + (r.root === 'HKLM' ? 'machine' : 'user') + '.log');
+  fs.rmSync(logFile, { force: true });
+  const env = { OPENPUB_TEST_UPDATE_FEED: f.url, OPENPUB_TEST_UPDATE_DELAY: '500', OPENPUB_TEST_UPDATE_LOG: logFile };
+  const before = f.requests.length;
+  const app = await lib.launchPackaged(r.exe, [], { profile, env });
+  const page = await app.firstWindow();
+  let result = {};
+  try {
+    await page.waitForSelector('#updnote:not([hidden]) #updYes', { timeout: 30000 });
+    await page.waitForTimeout(1500);
+    result.beforeAnswer = f.requests.length - before;
+    // something to keep across the update: a word in the personal dictionary
+    await page.evaluate(() => OP.desktop.spellAdd('openpubupdatetestword'));
+    await page.click('#updYes');
+    await page.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 60000 });
+    result.offer = await page.evaluate(() => document.getElementById('updnote').textContent);
+    await page.click('#updDownload');
+    await page.waitForSelector('#updnote:not([hidden]) #updRestart', { timeout: 180000 });
+    result.log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+    await page.click('#updRestart');
+  } catch (e) { result.error = e.message.split('\n')[0]; }
+  // the installer runs silently and starts the new version
+  const updated = await waitFor(() => { const u = findUninstall(r.root); return u && u.values.DisplayVersion === NEXT; }, 180000);
+  const exeVersion = cp.spawnSync('powershell.exe', ['-NoProfile', '-Command', '(Get-Item -LiteralPath "' + r.exe + '").VersionInfo.ProductVersion'], { encoding: 'utf8' }).stdout.trim();
+  const restarted = await waitFor(() => processesIn(r.dir).length > 0, 30000);
+  killIn(r.dir);
+  await waitFor(() => !processesIn(r.dir).length, 15000);
+  ok(!result.error && result.beforeAnswer === 0 && /OpenPub \d+\.\d+\.\d+ is available/.test(result.offer || ''), label + ': installed ' + VERSION + ' asks first (no request before the answer), then offers ' + NEXT + (result.error ? ' — ' + result.error : ''));
+  const differential = /Download block maps/.test(result.log || '') && !/fallback to full download/i.test(result.log || '');
+  ok(differential, label + ': the download used the blockmaps (differential download)' + (differential ? '' : ': ' + (result.log || '').split('\n').filter((l) => /block|full|error/i.test(l)).slice(0, 3).join(' | ')));
+  ok(updated && exeVersion.startsWith(NEXT) && restarted, label + ': Restart to update installs ' + NEXT + ' silently and starts it (installed version ' + exeVersion + ')');
+  // the new version, with the same profile: settings and personal dictionary kept
+  const app2 = await lib.launchPackaged(r.exe, [], { profile });
+  const page2 = await app2.firstWindow();
+  await page2.waitForFunction(() => window.OP && OP.desktop, null, { timeout: 30000 });
+  const after = { version: await app2.evaluate(({ app }) => app.getVersion()), unknown: await page2.evaluate(() => OP.desktop.spellCheck(['openpubupdatetestword'])),
+    auto: await page2.evaluate(() => OP.desktop.update.state().then((s) => s.auto)) };
+  await app2.evaluate(({ app }) => app.exit(0)).catch(() => {});
+  await waitFor(() => !processesIn(r.dir).length, 15000);
+  ok(after.version === NEXT && after.unknown.length === 0 && after.auto === true, label + ': ' + NEXT + ' runs and keeps the settings and the personal dictionary (' + JSON.stringify(after) + ')');
+}
+
 async function checkUninstall(r, deleteData) {
   const C = 'Software\\Classes';
   const args = ['/S'].concat(r.root === 'HKLM' ? ['/allusers'] : ['/currentuser'], deleteData ? ['--delete-app-data'] : []);
@@ -139,15 +218,18 @@ async function checkUninstall(r, deleteData) {
   fs.writeFileSync(MARKER, 'Left by tools/e2e-installer.js to check that uninstalling keeps settings. Safe to delete.');
   try {
     const u = await checkInstall('currentuser');
+    await checkUpdate(u);
     await checkUninstall(u, false);
     if (!isAdmin()) skip('per-machine install (needs an administrator prompt; CI runs it)');
     else {
       const m = await checkInstall('allusers');
+      await checkUpdate(m);
       const tryDelete = !!process.env.CI && !hadData; // never delete someone's real settings
       await checkUninstall(m, tryDelete);
       if (!tryDelete) console.log('(not trying --delete-app-data: only on CI with no earlier settings)');
     }
   } finally {
+    if (feed) feed.close();
     try { fs.rmSync(MARKER, { force: true }); if (!hadData && fs.existsSync(APPDATA_DIR) && !fs.readdirSync(APPDATA_DIR).length) fs.rmdirSync(APPDATA_DIR); } catch (e) { /* leave it */ }
   }
   finish();

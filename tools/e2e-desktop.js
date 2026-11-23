@@ -496,6 +496,94 @@ const sh = lib.sh;
   const res = await Promise.race([closed.then(() => 'closed'), new Promise(r => setTimeout(() => r('timeout'), 8000))]);
   ok(res === 'closed', 'window closes after the unsaved-changes prompt');
   if (res !== 'closed') await app.evaluate(({ app }) => app.exit(0));
+  // ---- 19. update checks (desktop/appsrc/updater.js), against a local feed with the test hooks
+  {
+    const http = require('http'), os = require('os');
+    const feedDir = path.join(OUT, 'update-feed'); fs.mkdirSync(feedDir, { recursive: true });
+    fs.writeFileSync(path.join(feedDir, 'latest.yml'), 'version: 99.0.0\nfiles:\n  - url: OpenPub-99.0.0-win64-setup.exe\n    sha512: AAAA\n    size: 1\npath: OpenPub-99.0.0-win64-setup.exe\nsha512: AAAA\nreleaseDate: \'2026-11-19T00:00:00.000Z\'\n');
+    const requests = [];
+    const server = http.createServer((req, res) => {
+      requests.push(req.url);
+      const f = path.join(feedDir, path.basename(decodeURIComponent(req.url.split('?')[0])));
+      if (fs.existsSync(f)) res.end(fs.readFileSync(f)); else { res.statusCode = 404; res.end(); }
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const FEED = 'http://127.0.0.1:' + server.address().port + '/';
+    const profileWith = (updates) => { const p = path.join(os.tmpdir(), 'openpub-upd-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)); fs.mkdirSync(p, { recursive: true }); if (updates) fs.writeFileSync(path.join(p, 'settings.json'), JSON.stringify({ updates })); return p; };
+    const env = (extra) => Object.assign({ OPENPUB_TEST_UPDATE_FEED: FEED, OPENPUB_TEST_UPDATE_MODE: 'installed', OPENPUB_TEST_UPDATE_DELAY: '300' }, extra || {});
+    async function run(opts, fn) {
+      const a = await lib.launchDesktop([], opts), p = await a.firstWindow();
+      await p.waitForFunction(() => window.OP && OP.app && OP.app.updateState, null, { timeout: 20000 });
+      await p.waitForTimeout(400);
+      try { return await fn(p, a); } finally { await a.evaluate(({ app }) => app.exit(0)).catch(() => {}); }
+    }
+    const noteText = (p) => p.evaluate(() => { const n = document.getElementById('updnote'); return n && !n.hidden ? n.textContent : ''; });
+    const manual = async (p) => { await p.evaluate(() => OP.app.checkForUpdates()); await p.waitForFunction(() => { const s = document.getElementById('updStatus'); return s && !/Checking/.test(s.textContent); }, null, { timeout: 20000 }); return p.evaluate(() => document.getElementById('updStatus').textContent); };
+
+    const p1 = profileWith(null);
+    let r = await run({ profile: p1, env: env() }, async (p) => {
+      await p.waitForSelector('#updnote:not([hidden]) #updYes', { timeout: 10000 });
+      const asked = await noteText(p);
+      await p.waitForTimeout(1500);
+      const before = requests.length;
+      await p.click('#updNo');
+      await p.waitForTimeout(1500);
+      const afterNo = requests.length;
+      const status = await manual(p);
+      await p.keyboard.press('Escape');
+      await p.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 10000 });
+      const offer = await noteText(p);
+      const buttons = await p.evaluate(() => ['updDownload', 'updNotes', 'updLater', 'updSkip'].every(id => !!document.getElementById(id)));
+      await p.click('#updSkip');
+      await p.waitForTimeout(500);
+      return { asked, before, afterNo, status, offer, buttons, hidden: !(await noteText(p)) };
+    });
+    ok(/Check for updates automatically\?/.test(r.asked) && r.before === 0 && r.afterNo === 0, 'first start asks "Check for updates automatically?" and makes no request before the answer or after No (' + r.before + ', ' + r.afterNo + ')');
+    ok(/99\.0\.0 is available/.test(r.status) && requests.some(u => /latest\.yml/.test(u)), 'Check for updates works with automatic checks off: ' + r.status);
+    ok(/OpenPub 99\.0\.0 is available/.test(r.offer) && r.buttons && r.hidden, 'the notice offers Download, What\'s new, Not now and Skip this version; Skip puts it away');
+    const settings1 = JSON.parse(fs.readFileSync(path.join(p1, 'settings.json'), 'utf8')).updates;
+    ok(settings1.auto === false && settings1.skip === '99.0.0', 'the answer and the skipped version are kept in the settings: ' + JSON.stringify(settings1));
+
+    let n0 = requests.length;
+    r = await run({ profile: profileWith({ auto: true, skip: '99.0.0', lastCheck: 0 }), env: env() }, async (p) => { await p.waitForTimeout(2500); return { note: await noteText(p) }; });
+    ok(requests.length > n0 && !r.note, 'automatic check runs after start when switched on, and does not offer a skipped version');
+
+    n0 = requests.length;
+    r = await run({ profile: profileWith({ auto: true, skip: null, lastCheck: Date.now() }), env: env() }, async (p) => { await p.waitForTimeout(2000); return { note: await noteText(p) }; });
+    ok(requests.length === n0 && !r.note, 'at most one automatic check a day: no check when the last one was today');
+
+    n0 = requests.length;
+    r = await run({ profile: profileWith(null), env: env({ OPENPUB_TEST_UPDATE_POLICY: '1' }) }, async (p) => { await p.waitForTimeout(1500); const note = await noteText(p); return { note, status: await manual(p) }; });
+    ok(!r.note && requests.length === n0 && /managed by your organisation/.test(r.status), 'admin policy: no question, no checks, and Check for updates says ' + r.status);
+
+    r = await run({ profile: profileWith({ auto: true, skip: null, lastCheck: 0 }), env: env({ OPENPUB_TEST_UPDATE_FEED: 'http://127.0.0.1:9/' }) }, async (p) => {
+      await p.waitForTimeout(2500);
+      const quiet = !(await noteText(p)) && !(await p.evaluate(() => document.querySelector('#toasts .err')));
+      return { quiet, status: await manual(p) };
+    });
+    ok(r.quiet && /could not check/i.test(r.status), 'offline: the automatic check fails quietly, Check for updates says ' + r.status);
+
+    r = await run({ profile: profileWith({ auto: true, skip: null, lastCheck: 0 }), env: env({ OPENPUB_TEST_UPDATE_PER_MACHINE: '1', OPENPUB_TEST_UPDATE_NOT_ADMIN: '1' }) }, async (p) => {
+      await p.waitForSelector('#updnote:not([hidden]) #updPage', { timeout: 10000 });
+      return { note: await noteText(p), download: await p.evaluate(() => !!document.getElementById('updDownload')) };
+    });
+    ok(/administrator needs to install/.test(r.note) && !r.download, 'installed for everyone, standard user: the notice says an administrator needs to install it, with no Download');
+
+    r = await run({ profile: profileWith({ auto: true, skip: null, lastCheck: 0 }), env: env({ OPENPUB_TEST_UPDATE_PER_MACHINE: '1' }) }, async (p) => {
+      await p.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 10000 });
+      return { note: await noteText(p) };
+    });
+    ok(/Windows will ask for permission/.test(r.note), 'installed for everyone, administrator: Download, and the notice says Windows will ask for permission');
+
+    n0 = requests.length;
+    r = await run({ profile: profileWith(null), env: env({ OPENPUB_TEST_UPDATE_MODE: 'store' }) }, async (p) => { await p.waitForTimeout(1500); return { note: await noteText(p), cmd: await p.evaluate(() => { const b = document.getElementById('rbUpdates'); return !!b && !b.hidden; }) }; });
+    ok(!r.note && !r.cmd && requests.length === n0, 'Microsoft Store build: no question, no Check for updates command, no requests');
+
+    r = await run({ profile: profileWith(null) }, async (p) => { await p.waitForTimeout(1000); return { note: await noteText(p), cmd: await p.evaluate(() => { const b = document.getElementById('rbUpdates'); return !!b && !b.hidden; }) }; });
+    ok(!r.note && !r.cmd, 'running from source: update checks are off');
+    server.close();
+  }
+
   // CI sets OPENPUB_REQUIRE_ALL so that a missing inspection tool fails the run instead of skipping quietly
   if (skipped && process.env.OPENPUB_REQUIRE_ALL) ok(false, skipped + ' group(s) skipped, but OPENPUB_REQUIRE_ALL is set');
   console.log((failures ? failures + ' FAILED' : 'ALL PASSED') + (skipped ? ', ' + skipped + ' group(s) skipped' : ''));
