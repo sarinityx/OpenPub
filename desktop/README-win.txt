@@ -20,7 +20,9 @@ INSTALL
   Portable folder (OpenPub-<version>-win64.zip)
     Unzip and double-click OpenPub.exe. Nothing is installed; keep the folder
     together (the .exe needs the files beside it). You can move the whole
-    folder anywhere and pin OpenPub.exe to the taskbar.
+    folder anywhere and pin OpenPub.exe to the taskbar. It asks the same
+    "Check for updates automatically?" question; when a new version is out
+    it shows a notice linking the download page (it never updates itself).
 
   Windows SmartScreen may warn the first time because the app is not signed.
   Choose "More info" > "Run anyway".
