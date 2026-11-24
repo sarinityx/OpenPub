@@ -63,6 +63,7 @@ function isPerMachine() {
 /** A member of the Administrators group (Windows asks for permission), even if this process is not elevated. */
 function isAdmin() {
   if (env.OPENPUB_TEST_UPDATE_NOT_ADMIN === '1') return false;
+  if (process.platform !== 'win32') return true; // only reached by the tests' simulated installs on Linux
   const r = spawnSync('whoami', ['/groups', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
   return r.status === 0 && /"S-1-5-32-544"/.test(r.stdout || '');
 }

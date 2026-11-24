@@ -500,7 +500,9 @@ const sh = lib.sh;
   {
     const http = require('http'), os = require('os');
     const feedDir = path.join(OUT, 'update-feed'); fs.mkdirSync(feedDir, { recursive: true });
-    fs.writeFileSync(path.join(feedDir, 'latest.yml'), 'version: 99.0.0\nfiles:\n  - url: OpenPub-99.0.0-win64-setup.exe\n    sha512: AAAA\n    size: 1\npath: OpenPub-99.0.0-win64-setup.exe\nsha512: AAAA\nreleaseDate: \'2026-11-19T00:00:00.000Z\'\n');
+    const latestYml = ('version: 99.0.0\nfiles:\n  - url: OpenPub-99.0.0-win64-setup.exe\n    sha512: AAAA\n    size: 1\npath: OpenPub-99.0.0-win64-setup.exe\nsha512: AAAA\nreleaseDate: \'2026-11-19T00:00:00.000Z\'\n');
+    // electron-updater reads latest.yml on Windows and latest-linux.yml on Linux (OpenPub ships for Windows; the tests run on both)
+    for (const name of ['latest.yml', 'latest-linux.yml']) fs.writeFileSync(path.join(feedDir, name), latestYml);
     const requests = [];
     const server = http.createServer((req, res) => {
       requests.push(req.url);
@@ -531,7 +533,7 @@ const sh = lib.sh;
       const afterNo = requests.length;
       const status = await manual(p);
       await p.keyboard.press('Escape');
-      await p.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 10000 });
+      await p.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 10000 }).catch(() => {});
       const offer = await noteText(p);
       const buttons = await p.evaluate(() => ['updDownload', 'updNotes', 'updLater', 'updSkip'].every(id => !!document.getElementById(id)));
       await p.click('#updSkip');
@@ -539,7 +541,7 @@ const sh = lib.sh;
       return { asked, before, afterNo, status, offer, buttons, hidden: !(await noteText(p)) };
     });
     ok(/Check for updates automatically\?/.test(r.asked) && r.before === 0 && r.afterNo === 0, 'first start asks "Check for updates automatically?" and makes no request before the answer or after No (' + r.before + ', ' + r.afterNo + ')');
-    ok(/99\.0\.0 is available/.test(r.status) && requests.some(u => /latest\.yml/.test(u)), 'Check for updates works with automatic checks off: ' + r.status);
+    ok(/99\.0\.0 is available/.test(r.status) && requests.some(u => /latest(-linux)?\.yml/.test(u)), 'Check for updates works with automatic checks off: ' + r.status);
     ok(/OpenPub 99\.0\.0 is available/.test(r.offer) && r.buttons && r.hidden, 'the notice offers Download, What\'s new, Not now and Skip this version; Skip puts it away');
     const settings1 = JSON.parse(fs.readFileSync(path.join(p1, 'settings.json'), 'utf8')).updates;
     ok(settings1.auto === false && settings1.skip === '99.0.0', 'the answer and the skipped version are kept in the settings: ' + JSON.stringify(settings1));

@@ -1,0 +1,76 @@
+name: Linux tests
+
+# The browser, desktop and parser tests on Linux (the Windows workflow also packages and tests the installer;
+# nothing is packaged here). The job name, "linux", is the check name to add to the required checks.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # make the desktop tests fail, not skip, if an inspection tool is missing
+      OPENPUB_REQUIRE_ALL: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22' # the minimum in package.json engines
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/appsrc/package-lock.json
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Install pikepdf 10.18.2
+        run: |
+          python3 -m pip install pikepdf==10.18.2
+          python3 -c "import pikepdf; print('pikepdf', pikepdf.__version__)"
+
+      # Ubuntu's own packages; the version check fails the job if the runner image moves to another series
+      - name: Install poppler-utils and Ghostscript (Ubuntu packages, versions checked)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends poppler-utils ghostscript xvfb
+          pdfinfo -v 2>&1 | head -1
+          gs --version
+          pdfinfo -v 2>&1 | grep -Eq 'version (2[4-9]|[3-9][0-9])\.' || { echo "::error::poppler 24 or later expected"; exit 1; }
+          gs --version | grep -Eq '^(10|1[1-9])\.' || { echo "::error::Ghostscript 10 or later expected"; exit 1; }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Browser tests
+        run: npm run test:web
+
+      - name: Desktop tests
+        run: xvfb-run -a npm run test:desktop
+
+      - name: Parser run over the sample files
+        run: npm run test:parser
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-out-linux
+          path: test-out/
+          retention-days: 7
+          if-no-files-found: ignore
