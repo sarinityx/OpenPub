@@ -5,6 +5,9 @@
 //   --no-zip, --no-installer          -> skip those steps
 //   --version 9.9.9 --out DIR         -> build as another version into another folder (tools/e2e-installer.js uses
 //                                        this to make the "next" version it updates to); the repository is not changed
+//   --publisher "CN=..., O=..."       -> app-update.yml names the signing certificate: updates must be signed by it
+//   --from-folder                     -> Windows only: do not package; zip and build the installer from the folder
+//                                        already in DIST (release.yml: after SignPath has signed OpenPub.exe in it)
 import { packager } from '@electron/packager';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -18,7 +21,7 @@ const argValue = (name) => { const i = process.argv.indexOf(name); return i > 0 
 const DESKTOP = path.join(ROOT, 'desktop'), APP = path.join(DESKTOP, 'appsrc');
 const DIST = path.resolve(argValue('--out') || path.join(DESKTOP, 'dist'));
 const RES = path.join(DESKTOP, 'build'); // Windows icons and the NSIS additions
-const args = process.argv.slice(2).filter((a, i, all) => !['--out', '--version'].includes(all[i - 1]));
+const args = process.argv.slice(2).filter((a, i, all) => !['--out', '--version', '--publisher'].includes(all[i - 1]));
 const platform = args.find((a) => !a.startsWith('-')) || process.platform;
 const arch = 'x64';
 const zip = !args.includes('--no-zip');
@@ -28,43 +31,59 @@ const version = argValue('--version') || require(path.join(APP, 'package.json'))
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('--version must look like 1.2.3');
 const versionOverride = version !== require(path.join(APP, 'package.json')).version;
 const electronVersion = require('electron/package.json').version;
+const publisher = argValue('--publisher');
+const fromFolder = args.includes('--from-folder');
+if (fromFolder && platform !== 'win32') throw new Error('--from-folder is for the Windows build only');
+const { updateConfigYml } = require('./update-config.js');
 
-if (!fs.existsSync(path.join(APP, 'node_modules', 'nspell'))) throw new Error('desktop/appsrc/node_modules is missing: run "npm install" in the repository root first');
-
-// 1. rebuild the single-file editor (also writes desktop/appsrc/app/OpenPub.html)
-execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build.js')], { stdio: 'inherit' });
-
-// 2. package
-const opts = { dir: APP, name: 'OpenPub', platform, arch, electronVersion, asar: true, out: DIST, overwrite: true, quiet: true, appVersion: version };
-if (versionOverride) opts.sanitizePackageJson = [(pkg) => { pkg.version = version; return pkg; }];
-if (platform === 'win32') {
-  // opub.ico is the icon of files the installer associates with OpenPub (resources\opub.ico)
-  opts.extraResource = [path.join(RES, 'opub.ico')];
-  opts.win32metadata = { CompanyName: 'OpenPub', FileDescription: 'OpenPub', ProductName: 'OpenPub', InternalName: 'OpenPub', OriginalFilename: 'OpenPub.exe' };
-  // setting the exe icon and version details uses rcedit, which needs Wine outside Windows
-  if (onWindows) opts.icon = path.join(RES, 'icon.ico');
-  else console.log('Not on Windows: OpenPub.exe keeps the default Electron icon and version details.');
+let out;
+if (fromFolder) {
+  // the folder an earlier run packaged (and SignPath signed): only app-update.yml is written again, to add the
+  // publisher. It is outside OpenPub.exe, so rewriting it leaves the signature intact.
+  out = path.join(DIST, 'OpenPub-win32-x64');
+  for (const f of ['OpenPub.exe', path.join('resources', 'app.asar')]) if (!fs.existsSync(path.join(out, f))) throw new Error('--from-folder: ' + path.join(out, f) + ' is missing');
+  fs.writeFileSync(path.join(out, 'resources', 'app-update.yml'), updateConfigYml(publisher));
+  console.log('using the packaged folder', path.relative(ROOT, out) + (publisher ? '; updates must be signed by ' + publisher : ''));
+} else {
+  out = await packageApp();
 }
-const [out] = await packager(opts);
 
-// 3. keep only the English locale files (saves about 40 MB)
-const locales = path.join(out, 'locales');
-if (fs.existsSync(locales)) for (const f of fs.readdirSync(locales)) if (!/^en-(US|GB)\.pak$/.test(f)) fs.rmSync(path.join(locales, f));
+async function packageApp() {
+  if (!fs.existsSync(path.join(APP, 'node_modules', 'nspell'))) throw new Error('desktop/appsrc/node_modules is missing: run "npm install" in the repository root first');
 
-// 4. read-me and examples beside the executable
-fs.copyFileSync(path.join(DESKTOP, 'README-win.txt'), path.join(out, 'README.txt'));
-// OpenPub's licence; LICENSE in the folder is Electron's
-fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(out, 'LICENSE-OpenPub.txt'));
-// update checks (desktop/appsrc/updater.js): where electron-updater looks for new versions. electron-builder only
-// writes app-update.yml when it packages the app itself; it skips that for a prepackaged folder, so write it here.
-// No publisherName yet: update signature checking stays off until the first signed release (1.3 brief, item 5).
-if (platform === 'win32') {
-  fs.writeFileSync(path.join(out, 'resources', 'app-update.yml'),
-    ['owner: sarinityx', 'repo: OpenPub', 'provider: github', 'updaterCacheDirName: openpub-updater', ''].join('\n'));
+  // 1. rebuild the single-file editor (also writes desktop/appsrc/app/OpenPub.html)
+  execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build.js')], { stdio: 'inherit' });
+
+  // 2. package
+  const opts = { dir: APP, name: 'OpenPub', platform, arch, electronVersion, asar: true, out: DIST, overwrite: true, quiet: true, appVersion: version };
+  if (versionOverride) opts.sanitizePackageJson = [(pkg) => { pkg.version = version; return pkg; }];
+  if (platform === 'win32') {
+    // opub.ico is the icon of files the installer associates with OpenPub (resources\opub.ico)
+    opts.extraResource = [path.join(RES, 'opub.ico')];
+    opts.win32metadata = { CompanyName: 'OpenPub', FileDescription: 'OpenPub', ProductName: 'OpenPub', InternalName: 'OpenPub', OriginalFilename: 'OpenPub.exe' };
+    // setting the exe icon and version details uses rcedit, which needs Wine outside Windows
+    if (onWindows) opts.icon = path.join(RES, 'icon.ico');
+    else console.log('Not on Windows: OpenPub.exe keeps the default Electron icon and version details.');
+  }
+  const [out] = await packager(opts);
+
+  // 3. keep only the English locale files (saves about 40 MB)
+  const locales = path.join(out, 'locales');
+  if (fs.existsSync(locales)) for (const f of fs.readdirSync(locales)) if (!/^en-(US|GB)\.pak$/.test(f)) fs.rmSync(path.join(locales, f));
+
+  // 4. read-me and examples beside the executable
+  fs.copyFileSync(path.join(DESKTOP, 'README-win.txt'), path.join(out, 'README.txt'));
+  // OpenPub's licence; LICENSE in the folder is Electron's
+  fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(out, 'LICENSE-OpenPub.txt'));
+  // update checks (desktop/appsrc/updater.js): where electron-updater looks for new versions. electron-builder only
+  // writes app-update.yml when it packages the app itself; it skips that for a prepackaged folder, so write it here.
+  // Without --publisher (every build except a signed release) update signatures are not checked: tools/update-config.js.
+  if (platform === 'win32') fs.writeFileSync(path.join(out, 'resources', 'app-update.yml'), updateConfigYml(publisher));
+  fs.mkdirSync(path.join(out, 'examples'), { recursive: true });
+  for (const f of fs.readdirSync(path.join(DESKTOP, 'examples'))) fs.copyFileSync(path.join(DESKTOP, 'examples', f), path.join(out, 'examples', f));
+  console.log('packaged', path.relative(ROOT, out));
+  return out;
 }
-fs.mkdirSync(path.join(out, 'examples'), { recursive: true });
-for (const f of fs.readdirSync(path.join(DESKTOP, 'examples'))) fs.copyFileSync(path.join(DESKTOP, 'examples', f), path.join(out, 'examples', f));
-console.log('packaged', path.relative(ROOT, out));
 
 // 5. zip (zip on Linux/macOS, the tar that ships with Windows 10 and later on Windows)
 if (zip) {
@@ -72,7 +91,8 @@ if (zip) {
   const target = path.join(DIST, name);
   fs.rmSync(target, { force: true });
   try {
-    if (process.platform === 'win32') execFileSync('tar.exe', ['-a', '-c', '-f', name, path.basename(out)], { cwd: DIST, stdio: 'inherit' });
+    // Windows' own tar (bsdtar) by full path: Git Bash puts GNU tar first on PATH, which ignores -a and writes a tar
+    if (process.platform === 'win32') execFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-a', '-c', '-f', name, path.basename(out)], { cwd: DIST, stdio: 'inherit' });
     else execFileSync('zip', ['-q', '-r', '-9', name, path.basename(out)], { cwd: DIST, stdio: 'inherit' });
     console.log('zipped', path.relative(ROOT, target), (fs.statSync(target).size / 1e6).toFixed(0) + ' MB');
   } catch (e) {
@@ -98,8 +118,10 @@ if (installer && onWindows) {
       electronVersion,
       directories: { app: APP, output: DIST, buildResources: RES },
       extraMetadata: versionOverride ? { version } : undefined,
-      // verifyUpdateCodeSignature is set explicitly (electron-builder 27 requires it without a publisherName):
-      // off until the first signed release sets publisherName (1.3 brief, items 3 and 5)
+      // verifyUpdateCodeSignature only shapes the app-update.yml electron-builder would write, which it skips for a
+      // prepackaged folder: OpenPub's own app-update.yml carries publisherName (--publisher). It is set explicitly
+      // because electron-builder 27 requires it without a publisherName. signAndEditExecutable: false also keeps
+      // electron-builder from touching OpenPub.exe, which may already be signed (--from-folder).
       win: { icon: path.join(RES, 'icon.ico'), signAndEditExecutable: false, verifyUpdateCodeSignature: false },
       nsis: {
         oneClick: false,

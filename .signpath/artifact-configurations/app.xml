@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "app" (copy of the one in SignPath; keep them the same).
+     The artifact is the packaged folder OpenPub-win32-x64, uploaded by windows.yml as a zip with the folder's contents
+     at its root. Only OpenPub.exe is signed: OpenPub builds no other program file in the folder (the DLLs are
+     Electron's). The metadata restrictions are SignPath Foundation's rule: product name OpenPub, product version the
+     release's version (release.yml passes it as the "version" parameter). -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="OpenPub.exe" product-name="OpenPub" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
