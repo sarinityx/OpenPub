@@ -152,9 +152,11 @@ async function checkUpdate(r) {
   const logFile = path.join(OUT, 'updater-' + (r.root === 'HKLM' ? 'machine' : 'user') + '.log');
   fs.rmSync(logFile, { force: true });
   const env = { OPENPUB_TEST_UPDATE_FEED: f.url, OPENPUB_TEST_UPDATE_DELAY: '500', OPENPUB_TEST_UPDATE_LOG: logFile };
-  // an update downloaded by an earlier run (the per-user one) sits in this user's updater cache and would be reused
-  // without downloading: clear it so every run downloads, differentially. installer.exe (the installed version) stays.
-  fs.rmSync(path.join(process.env.LOCALAPPDATA, 'openpub-updater', 'pending'), { recursive: true, force: true });
+  // An earlier run (the per-user one, same Windows user) leaves its downloaded update in pending\ and the NEW
+  // version's blockmap as current.blockmap, which the next differential download would take as the old one.
+  // Keep only installer.exe, the copy of the installed version that this run's install just put there.
+  const cache = path.join(process.env.LOCALAPPDATA, 'openpub-updater');
+  if (fs.existsSync(cache)) for (const e of fs.readdirSync(cache)) if (e !== 'installer.exe') fs.rmSync(path.join(cache, e), { recursive: true, force: true });
   const before = f.requests.length;
   const app = await lib.launchPackaged(r.exe, [], { profile, env });
   const page = await app.firstWindow();
