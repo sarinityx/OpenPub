@@ -185,7 +185,7 @@ async function checkPortable() {
     return out;
   });
   ok(r.state.mode === 'portable' && r.state.ask === true && !r.state.canDownload && r.before === 0, 'portable zip: detected as portable, asks first, no request before the answer (' + r.state.mode + ', ' + r.before + ')');
-  ok(new RegExp('OpenPub ' + NEXT.replace(/\./g, '\\.') + ' is available').test(r.note) && /portable/.test(r.note) && !r.download, 'portable zip: the notice says ' + NEXT + ' is available and offers the release page, not Download');
+  ok(r.note.includes('OpenPub ' + NEXT + ' is available') && /portable/.test(r.note) && !r.download, 'portable zip: the notice says ' + NEXT + ' is available and offers the release page, not Download');
   const releaseUrl = 'https://github.com/sarinityx/OpenPub/releases/tag/v' + NEXT;
   ok(r.opened.length === 1 && r.opened[0] === releaseUrl && r.forced && r.forced.ok === false && !f.requests.slice(n0).some((u) => /setup\.exe/.test(u)), 'portable zip: Release page opens ' + r.opened.join(', ') + '; nothing is downloaded, even if asked');
 
