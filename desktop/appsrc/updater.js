@@ -2,7 +2,7 @@
 // and only when the user said yes to them, or chose "Check for updates", and never when the admin policy is set.
 //
 // Modes: store   (process.windowsStore) – the Store updates the app: no updater, no question, no setting
-//        installed (an NSIS install: "Uninstall OpenPub.exe" beside OpenPub.exe) – check, download, install
+//        installed (an NSIS install registered in Settings > Apps; see detectMode) – check, download, install
 //        portable  (the zip: no uninstaller beside the exe) – check only; the notice links the release page
 //        dev       (running from source) – off
 // Policy: DisableUpdateCheck = 1 (REG_DWORD) under HKLM\SOFTWARE\Policies\OpenPub or HKCU\SOFTWARE\Policies\OpenPub
@@ -34,19 +34,31 @@ function policyOff() {
   return regDword('HKLM', 'SOFTWARE\\Policies\\OpenPub', 'DisableUpdateCheck') === 1 ||
     regDword('HKCU', 'SOFTWARE\\Policies\\OpenPub', 'DisableUpdateCheck') === 1;
 }
+/**
+ * Installed or portable. An installed copy has "Uninstall OpenPub.exe" beside OpenPub.exe AND a Windows uninstall entry
+ * (Settings > Apps) whose UninstallString points at that file, under HKCU (installed for one user) or HKLM (for
+ * everyone). Anything else, such as the unzipped portable folder or a copied install folder, is portable: it never
+ * downloads or installs, because the installer would update the registered install, not this folder.
+ */
+const UNINSTALLER = path.join(path.dirname(process.execPath), 'Uninstall OpenPub.exe');
+function registeredIn(root) {
+  if (process.platform !== 'win32') return false;
+  const r = spawnSync('reg', ['query', root + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', '/s', '/f', UNINSTALLER, '/d'], { encoding: 'utf8', windowsHide: true });
+  return r.status === 0 && /UninstallString\s+REG_\w+\s+"?[^\r\n]*Uninstall OpenPub\.exe/i.test(r.stdout || '');
+}
+let registration = null; // 'HKCU', 'HKLM' or null
 function detectMode() {
   if (process.windowsStore) return 'store';
   if (/^(installed|portable|store)$/.test(env.OPENPUB_TEST_UPDATE_MODE || '')) return env.OPENPUB_TEST_UPDATE_MODE;
   if (!app.isPackaged) return 'dev';
-  return fs.existsSync(path.join(path.dirname(process.execPath), 'Uninstall OpenPub.exe')) ? 'installed' : 'portable';
+  if (!fs.existsSync(UNINSTALLER)) return 'portable';
+  registration = registeredIn('HKLM') ? 'HKLM' : registeredIn('HKCU') ? 'HKCU' : null;
+  return registration ? 'installed' : 'portable';
 }
 /** An install for everyone (HKLM) rather than for this user: updating it needs administrator rights. */
 function isPerMachine() {
   if (env.OPENPUB_TEST_UPDATE_MODE) return env.OPENPUB_TEST_UPDATE_PER_MACHINE === '1';
-  const pf = [env.ProgramFiles, env.ProgramW6432].filter(Boolean).map((p) => p.toLowerCase() + path.sep);
-  if (pf.some((p) => process.execPath.toLowerCase().startsWith(p))) return true;
-  const r = spawnSync('reg', ['query', 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', '/s', '/f', path.dirname(process.execPath), '/d'], { encoding: 'utf8', windowsHide: true });
-  return r.status === 0 && /InstallLocation/i.test(r.stdout || '');
+  return registration === 'HKLM';
 }
 /** A member of the Administrators group (Windows asks for permission), even if this process is not elevated. */
 function isAdmin() {

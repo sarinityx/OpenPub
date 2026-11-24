@@ -145,6 +145,64 @@ async function startFeed() {
   return feed;
 }
 
+// ---- the portable zip (1.3 brief, item 4): the same question, setting, policy and check, but the notice only links
+// the release page: no download, no install. Detection: no uninstall entry for this folder means portable.
+async function checkPortable() {
+  const f = await startFeed();
+  const zip = path.join(path.dirname(SETUP), 'OpenPub-' + VERSION + '-win64.zip');
+  if (!fs.existsSync(zip)) { ok(false, 'portable zip not found: ' + path.relative(lib.ROOT, zip)); return; }
+  const dir = path.join(OUT, 'portable');
+  fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+  cp.execFileSync('tar', ['-xf', zip, '-C', dir]);
+  const exe = path.join(dir, 'OpenPub-win32-x64', 'OpenPub.exe');
+  const baseEnv = { OPENPUB_TEST_UPDATE_FEED: f.url, OPENPUB_TEST_UPDATE_DELAY: '500' };
+  const fresh = (name) => { const p = path.join(OUT, 'profile-' + name); fs.rmSync(p, { recursive: true, force: true }); return p; };
+  async function launch(profile, env, fn) {
+    const app = await lib.launchPackaged(exe, [], { profile, env: Object.assign({}, baseEnv, env) });
+    const page = await app.firstWindow();
+    try {
+      await page.waitForFunction(() => window.OP && OP.app && OP.app.updateState && OP.app.updateState(), null, { timeout: 30000 });
+      return await fn(page, app);
+    } finally { await app.evaluate(({ app }) => app.exit(0)).catch(() => {}); await waitFor(() => !processesIn(path.dirname(exe)).length, 15000); }
+  }
+  const note = (page) => page.evaluate(() => { const n = document.getElementById('updnote'); return n && !n.hidden ? n.textContent : ''; });
+  const manual = async (page) => { await page.evaluate(() => OP.app.checkForUpdates()); await page.waitForFunction(() => { const s = document.getElementById('updStatus'); return s && !/Checking/.test(s.textContent); }, null, { timeout: 30000 }); return page.evaluate(() => document.getElementById('updStatus').textContent); };
+
+  let n0 = f.requests.length;
+  const r = await launch(fresh('portable'), {}, async (page, app) => {
+    await app.evaluate(({ shell }) => { global.__opened = []; shell.openExternal = async (u) => { global.__opened.push(u); }; });
+    await page.waitForSelector('#updnote:not([hidden]) #updYes', { timeout: 30000 });
+    await page.waitForTimeout(1500);
+    const out = { state: await page.evaluate(() => OP.desktop.update.state()), before: f.requests.length - n0 };
+    await page.click('#updYes');
+    await page.waitForSelector('#updnote:not([hidden]) #updPage', { timeout: 60000 });
+    out.note = await note(page);
+    out.download = await page.evaluate(() => !!document.getElementById('updDownload'));
+    await page.click('#updPage');
+    await page.waitForTimeout(500);
+    out.opened = await app.evaluate(() => global.__opened);
+    out.forced = await page.evaluate(() => OP.desktop.update.download());
+    return out;
+  });
+  ok(r.state.mode === 'portable' && r.state.ask === true && !r.state.canDownload && r.before === 0, 'portable zip: detected as portable, asks first, no request before the answer (' + r.state.mode + ', ' + r.before + ')');
+  ok(r.note.includes('OpenPub ' + NEXT + ' is available') && /portable/.test(r.note) && !r.download, 'portable zip: the notice says ' + NEXT + ' is available and offers the release page, not Download');
+  const releaseUrl = 'https://github.com/sarinityx/OpenPub/releases/tag/v' + NEXT;
+  ok(r.opened.length === 1 && r.opened[0] === releaseUrl && r.forced && r.forced.ok === false && !f.requests.slice(n0).some((u) => /setup\.exe/.test(u)), 'portable zip: Release page opens ' + r.opened.join(', ') + '; nothing is downloaded, even if asked');
+
+  // the policy, through the test hook and (where this user may write it) through the real registry value
+  n0 = f.requests.length;
+  const p1 = await launch(fresh('portable-policy'), { OPENPUB_TEST_UPDATE_POLICY: '1' }, async (pg) => { await pg.waitForTimeout(2000); return { note: await note(pg), status: await manual(pg) }; });
+  ok(!p1.note && f.requests.length === n0 && /managed by your organisation/.test(p1.status), 'portable zip with the policy: no question, no request, Check for updates says ' + p1.status);
+  const KEY = 'HKCU\\SOFTWARE\\Policies\\OpenPub';
+  if (reg(['query', KEY]) !== null) { skip('real policy value: ' + KEY + ' already exists on this computer and is left alone'); return; }
+  if (reg(['add', KEY, '/v', 'DisableUpdateCheck', '/t', 'REG_DWORD', '/d', '1', '/f']) === null) { skip('real policy value: this user cannot write ' + KEY + ' (needs administrator rights; CI runs it)'); return; }
+  try {
+    n0 = f.requests.length;
+    const p2 = await launch(fresh('portable-policy-reg'), {}, async (pg) => { await pg.waitForTimeout(2000); return { note: await note(pg), status: await manual(pg), state: await pg.evaluate(() => OP.desktop.update.state()) }; });
+    ok(!p2.note && f.requests.length === n0 && p2.state.policy === true && /managed by your organisation/.test(p2.status), 'DisableUpdateCheck = 1 under ' + KEY + ': no question, no request, ' + p2.status);
+  } finally { reg(['delete', KEY, '/f']); }
+}
+
 async function checkUpdate(r) {
   const f = await startFeed(), label = r.label;
   const profile = path.join(OUT, 'profile-' + (r.root === 'HKLM' ? 'machine' : 'user'));
@@ -157,6 +215,20 @@ async function checkUpdate(r) {
   // Keep only installer.exe, the copy of the installed version that this run's install just put there.
   const cache = path.join(process.env.LOCALAPPDATA, 'openpub-updater');
   if (fs.existsSync(cache)) for (const e of fs.readdirSync(cache)) if (e !== 'installer.exe') fs.rmSync(path.join(cache, e), { recursive: true, force: true });
+  if (r.root === 'HKCU') {
+    // a copy of the installed folder (uninstaller included) is not the registered install: it counts as portable
+    const copy = path.join(OUT, 'copied-install');
+    fs.rmSync(copy, { recursive: true, force: true });
+    fs.cpSync(r.dir, copy, { recursive: true });
+    const ca = await lib.launchPackaged(path.join(copy, 'OpenPub.exe'), [], { profile: path.join(OUT, 'profile-copied') });
+    const cpg = await ca.firstWindow();
+    await cpg.waitForFunction(() => window.OP && OP.desktop, null, { timeout: 30000 });
+    const cs = await cpg.evaluate(() => OP.desktop.update.state());
+    await ca.evaluate(({ app }) => app.exit(0)).catch(() => {});
+    await waitFor(() => !processesIn(copy).length, 15000);
+    ok(cs.mode === 'portable' && !cs.canDownload, 'a copy of the installed folder elsewhere counts as portable (no uninstall entry points at it): ' + cs.mode);
+    fs.rmSync(copy, { recursive: true, force: true });
+  }
   const before = f.requests.length;
   const app = await lib.launchPackaged(r.exe, [], { profile, env });
   const page = await app.firstWindow();
@@ -165,6 +237,7 @@ async function checkUpdate(r) {
     await page.waitForSelector('#updnote:not([hidden]) #updYes', { timeout: 30000 });
     await page.waitForTimeout(1500);
     result.beforeAnswer = f.requests.length - before;
+    result.state = await page.evaluate(() => OP.desktop.update.state());
     // something to keep across the update: a word in the personal dictionary
     await page.evaluate(() => OP.desktop.spellAdd('openpubupdatetestword'));
     await page.click('#updYes');
@@ -181,6 +254,9 @@ async function checkUpdate(r) {
   const restarted = await waitFor(() => processesIn(r.dir).length > 0, 30000);
   killIn(r.dir);
   await waitFor(() => !processesIn(r.dir).length, 15000);
+  const wantMachine = r.root === 'HKLM';
+  ok(result.state && result.state.mode === 'installed' && result.state.perMachine === wantMachine && result.state.canDownload,
+    label + ': detected as installed ' + (wantMachine ? 'for everyone' : 'for this user') + ' (uninstall entry in ' + r.root + ' points at this folder)' + (result.state ? '' : ': no state'));
   ok(!result.error && result.beforeAnswer === 0 && /OpenPub \d+\.\d+\.\d+ is available/.test(result.offer || ''), label + ': installed ' + VERSION + ' asks first (no request before the answer), then offers ' + NEXT + (result.error ? ' — ' + result.error : ''));
   const differential = /Download block maps/.test(result.log || '') && !/fallback to full download/i.test(result.log || '');
   ok(differential, label + ': the download used the blockmaps (differential download)' + (differential ? '' : '; updater log: ' + (result.log || '(empty)').trim().split('\n').slice(-6).join(' | ')));
@@ -217,6 +293,8 @@ async function checkUninstall(r, deleteData) {
   ok(!rf.problems.length, 'release files: ' + rf.files.join(', ') + (rf.problems.length ? '; ' + rf.problems.join('; ') : '; latest.yml matches the installer (' + rf.size + ' bytes)'));
   const notes = require('./release-notes').notes(VERSION, true);
   ok(/OpenPub-[\d.]+-win64-setup\.exe/.test(notes) && /code-signing-policy\.html/.test(notes) && /privacy\.html/.test(notes), 'release notes name the installer and link the code signing policy and privacy page');
+  // the portable zip touches no install, so it is checked even where OpenPub is installed
+  await checkPortable();
   if (findUninstall('HKCU') || findUninstall('HKLM')) { skip('installer test: OpenPub is already installed on this computer, and the test would uninstall it'); finish(); }
   const hadData = fs.existsSync(APPDATA_DIR);
   fs.mkdirSync(APPDATA_DIR, { recursive: true });
