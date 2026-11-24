@@ -29,7 +29,7 @@
   <h2 id="it-policy">Can my IT department turn off update checks?</h2>
   <p>Yes. From version 1.3.0, set this registry value, for example through Group Policy preferences:</p>
   <p><code>HKEY_LOCAL_MACHINE\SOFTWARE\Policies\OpenPub</code>, value <code>DisableUpdateCheck</code>, type <code>REG_DWORD</code>, data <code>1</code>.</p>
-  <p>OpenPub then makes no update checks at all, does not ask about them, and its <b>Check for updates</b> command says updates are managed by your organisation. For unattended installs, the installer accepts <code>/S /allusers</code> (everyone on the computer, run as administrator) or <code>/S /currentuser</code>.</p>
+  <p>The same value under <code>HKEY_CURRENT_USER\SOFTWARE\Policies\OpenPub</code> applies to one user (for a per-user Group Policy). OpenPub then makes no update checks at all, does not ask about them, and its <b>Check for updates</b> command says updates are managed by your organisation. For unattended installs, the installer accepts <code>/S /allusers</code> (everyone on the computer, run as administrator) or <code>/S /currentuser</code>.</p>
 
   <h2 id="fonts">The text looks different from Publisher. Why?</h2>
   <p>OpenPub uses the fonts installed on your computer. If a publication uses a font you don't have, another font is used in its place and the import report and the design checker list it. Installing the font fixes it.</p>

@@ -31,6 +31,10 @@ const exe = process.argv[2] || path.join(lib.ROOT, 'desktop', 'dist', 'OpenPub-w
   const cm = await page.evaluate(async () => { const d = OP.app.S.doc; const r = await OP.desktop.cmykPdf(OP.sheetsHtml(d, OP.sheetsPlain(d, [0], [-1], { bleed: false, marks: false }))); return r.error ? { error: r.error } : { bytes: r.bytes.length, profile: r.profile, gs: r.version }; });
   if (process.env.OPENPUB_REQUIRE_ALL || !cm.error || !/Ghostscript/i.test(cm.error)) ok(!cm.error && cm.bytes > 1000, 'vector CMYK (pdfblack.js from the asar + Ghostscript): ' + JSON.stringify(cm));
   else console.log('SKIP vector CMYK (Ghostscript not installed): ' + cm.error);
+  // the packaged folder (no uninstaller beside the exe) is the portable copy: it asks before any update check
+  const upd = await page.evaluate(() => OP.desktop.update.state());
+  const asked = await page.evaluate(() => { const n = document.getElementById('updnote'); return !!n && !n.hidden && /Check for updates automatically/.test(n.textContent); });
+  ok(upd.mode === 'portable' && upd.ask === true && upd.auto === null && asked, 'update checks: portable copy, asks first, no check made (' + JSON.stringify({ mode: upd.mode, ask: upd.ask, auto: upd.auto }) + ')');
   const net = await page.evaluate(() => performance.getEntriesByType('resource').filter(r => /^https?:/.test(r.name)).map(r => r.name));
   ok(net.length === 0, 'no internet requests' + (net.length ? ': ' + net.join(', ') : ''));
   ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.join(' | ') : ''));

@@ -63,12 +63,15 @@ exports.launchChrome = function () {
 };
 
 // Electron from node_modules running the unpackaged desktop app with a clean profile (app.profile).
-exports.launchDesktop = async function (extraArgs) {
+// opts.profile reuses a profile folder; opts.env adds environment variables (the update tests' hooks).
+exports.launchDesktop = async function (extraArgs, opts) {
   const { _electron } = require('playwright-core');
-  const profile = path.join(os.tmpdir(), 'openpub-test-' + Date.now());
+  opts = opts || {};
+  const profile = opts.profile || path.join(os.tmpdir(), 'openpub-test-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
   const app = await _electron.launch({
     executablePath: require('electron'),
-    args: NOSANDBOX.concat(['--user-data-dir=' + profile, exports.DESKTOP_APP], extraArgs || [])
+    args: NOSANDBOX.concat(['--user-data-dir=' + profile, exports.DESKTOP_APP], extraArgs || []),
+    env: opts.env ? Object.assign({}, process.env, opts.env) : undefined
   });
   app.profile = profile;
   return app;
@@ -84,8 +87,10 @@ exports.secondInstance = function (profile, extraArgs) {
   });
 };
 // A packaged build (path to the executable).
-exports.launchPackaged = function (exe, extraArgs) {
+exports.launchPackaged = function (exe, extraArgs, opts) {
   const { _electron } = require('playwright-core');
-  const profile = path.join(os.tmpdir(), 'openpub-smoke-' + Date.now());
-  return _electron.launch({ executablePath: exe, args: NOSANDBOX.concat(['--user-data-dir=' + profile], extraArgs || []) });
+  opts = opts || {};
+  const profile = opts.profile || path.join(os.tmpdir(), 'openpub-smoke-' + Date.now());
+  return _electron.launch({ executablePath: exe, args: NOSANDBOX.concat(['--user-data-dir=' + profile], extraArgs || []),
+    env: opts.env ? Object.assign({}, process.env, opts.env) : undefined });
 };

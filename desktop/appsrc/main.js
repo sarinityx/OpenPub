@@ -1,4 +1,5 @@
-// OpenPub desktop shell: window, native file dialogs, vector PDF, printing and spelling.
+// OpenPub desktop shell: window, native file dialogs, vector PDF, printing, spelling and update checks.
+// Network: none, except the update check in updater.js (only after the user agrees, never under the admin policy).
 'use strict';
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell, session } = require('electron');
 const path = require('path');
@@ -6,12 +7,14 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, spawnSync } = require('child_process');
 const { pureBlackToGray } = require('./pdfblack');
+const setupUpdater = require('./updater');
 
 let win = null;
 let pendingFile = null;   // file passed on the command line before the window was ready
 let pageAsked = false;    // the page has asked for pendingFile, so it is listening for "file:opened"
 let closing = false;
 let lastDir = null;
+let sheetWindows = 0; // exports and prints in progress: an update never restarts during one
 const knownPaths = new Set(); // files the user picked in a dialog or opened; only these may be overwritten without asking
 
 const DOC_EXT = /\.(pub|opub|json)$/i;
@@ -93,21 +96,33 @@ function start() {
   win.on('close', async (e) => {
     if (closing) return;
     e.preventDefault();
-    let dirty = false;
-    try { dirty = await win.webContents.executeJavaScript('!!(window.OP && OP.app && OP.app.S && OP.app.S.dirty)'); } catch (err) { dirty = false; }
-    if (dirty) {
-      const r = await dialog.showMessageBox(win, { type: 'question', buttons: ['Save', "Don't save", 'Cancel'], defaultId: 0, cancelId: 2, noLink: true,
-        message: 'Save changes before closing?', detail: 'Your changes will be lost if you do not save them.' });
-      if (r.response === 2) return;
-      if (r.response === 0) {
-        let ok = false;
-        try { ok = await win.webContents.executeJavaScript('OP.app.saveProject()'); } catch (err) { ok = false; }
-        if (!ok) return;
-      }
-    }
+    if (!(await askUnsaved())) return;
     closing = true;
     win.close();
   });
+
+  setupUpdater({
+    getWin: () => win, readSettings, writeSettings,
+    isBusy: () => sheetWindows > 0,
+    // before "Restart to update": the same unsaved-changes question as closing, then let the updater quit
+    readyToQuit: async () => { if (!(await askUnsaved())) return false; closing = true; return true; }
+  });
+}
+
+/** Ask about unsaved changes. Resolves true when it is fine to close (saved, or the user chose not to). */
+async function askUnsaved() {
+  let dirty = false;
+  try { dirty = await win.webContents.executeJavaScript('!!(window.OP && OP.app && OP.app.S && OP.app.S.dirty)'); } catch (err) { dirty = false; }
+  if (!dirty) return true;
+  const r = await dialog.showMessageBox(win, { type: 'question', buttons: ['Save', "Don't save", 'Cancel'], defaultId: 0, cancelId: 2, noLink: true,
+    message: 'Save changes before closing?', detail: 'Your changes will be lost if you do not save them.' });
+  if (r.response === 2) return false;
+  if (r.response === 0) {
+    let ok = false;
+    try { ok = await win.webContents.executeJavaScript('OP.app.saveProject()'); } catch (err) { ok = false; }
+    return ok;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------- files
@@ -143,11 +158,13 @@ async function withSheetWindow(o, fn) {
   const tmp = path.join(app.getPath('temp'), 'openpub-print-' + process.pid + '-' + Date.now() + '.html');
   fs.writeFileSync(tmp, o.html, 'utf8');
   const w = new BrowserWindow({ show: false, width: 1000, height: 800, webPreferences: { sandbox: true, contextIsolation: true, javascript: true } });
+  sheetWindows++;
   try {
     await w.loadFile(tmp);
     try { await w.webContents.executeJavaScript('document.fonts.ready.then(function () { return Promise.all(Array.prototype.map.call(document.images, function (i) { return i.decode ? i.decode().catch(function () {}) : null; })); }).then(function () { return true; })'); } catch (e) { /* carry on */ }
     return await fn(w);
   } finally {
+    sheetWindows--;
     if (!w.isDestroyed()) w.destroy();
     fs.unlink(tmp, () => {});
   }

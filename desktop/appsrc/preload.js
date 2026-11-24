@@ -17,5 +17,17 @@ contextBridge.exposeInMainWorld('openpubDesktop', {
   cmykPdf: (o) => ipcRenderer.invoke('pdf:cmyk', o),
   spellCheck: (words) => ipcRenderer.invoke('spell:check', words),
   spellSuggest: (word) => ipcRenderer.invoke('spell:suggest', word),
-  spellAdd: (word) => ipcRenderer.invoke('spell:add', word)
+  spellAdd: (word) => ipcRenderer.invoke('spell:add', word),
+  // update checks (updater.js): state, the first-start answer, the setting, and the notice's buttons
+  update: {
+    state: () => ipcRenderer.invoke('update:state'),
+    onState: (cb) => { ipcRenderer.on('update:state', (e, s) => cb(s)); },
+    answer: (yes) => ipcRenderer.invoke('update:answer', !!yes),
+    setAuto: (on) => ipcRenderer.invoke('update:set-auto', !!on),
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    install: () => ipcRenderer.invoke('update:install'),
+    skip: (version) => ipcRenderer.invoke('update:skip', String(version || '')),
+    releasePage: () => ipcRenderer.invoke('update:release-page')
+  }
 });

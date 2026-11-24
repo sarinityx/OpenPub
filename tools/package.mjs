@@ -3,6 +3,8 @@
 //   node tools/package.mjs win32      -> Windows x64: folder, zip and installer (the installer and the exe icon need Windows)
 //   node tools/package.mjs linux --no-zip
 //   --no-zip, --no-installer          -> skip those steps
+//   --version 9.9.9 --out DIR         -> build as another version into another folder (tools/e2e-installer.js uses
+//                                        this to make the "next" version it updates to); the repository is not changed
 import { packager } from '@electron/packager';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -12,15 +14,19 @@ import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DESKTOP = path.join(ROOT, 'desktop'), APP = path.join(DESKTOP, 'appsrc'), DIST = path.join(DESKTOP, 'dist');
+const argValue = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
+const DESKTOP = path.join(ROOT, 'desktop'), APP = path.join(DESKTOP, 'appsrc');
+const DIST = path.resolve(argValue('--out') || path.join(DESKTOP, 'dist'));
 const RES = path.join(DESKTOP, 'build'); // Windows icons and the NSIS additions
-const args = process.argv.slice(2);
+const args = process.argv.slice(2).filter((a, i, all) => !['--out', '--version'].includes(all[i - 1]));
 const platform = args.find((a) => !a.startsWith('-')) || process.platform;
 const arch = 'x64';
 const zip = !args.includes('--no-zip');
 const onWindows = process.platform === 'win32';
 const installer = platform === 'win32' && !args.includes('--no-installer');
-const version = require(path.join(APP, 'package.json')).version;
+const version = argValue('--version') || require(path.join(APP, 'package.json')).version;
+if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('--version must look like 1.2.3');
+const versionOverride = version !== require(path.join(APP, 'package.json')).version;
 const electronVersion = require('electron/package.json').version;
 
 if (!fs.existsSync(path.join(APP, 'node_modules', 'nspell'))) throw new Error('desktop/appsrc/node_modules is missing: run "npm install" in the repository root first');
@@ -29,7 +35,8 @@ if (!fs.existsSync(path.join(APP, 'node_modules', 'nspell'))) throw new Error('d
 execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build.js')], { stdio: 'inherit' });
 
 // 2. package
-const opts = { dir: APP, name: 'OpenPub', platform, arch, electronVersion, asar: true, out: DIST, overwrite: true, quiet: true };
+const opts = { dir: APP, name: 'OpenPub', platform, arch, electronVersion, asar: true, out: DIST, overwrite: true, quiet: true, appVersion: version };
+if (versionOverride) opts.sanitizePackageJson = [(pkg) => { pkg.version = version; return pkg; }];
 if (platform === 'win32') {
   // opub.ico is the icon of files the installer associates with OpenPub (resources\opub.ico)
   opts.extraResource = [path.join(RES, 'opub.ico')];
@@ -48,6 +55,13 @@ if (fs.existsSync(locales)) for (const f of fs.readdirSync(locales)) if (!/^en-(
 fs.copyFileSync(path.join(DESKTOP, 'README-win.txt'), path.join(out, 'README.txt'));
 // OpenPub's licence; LICENSE in the folder is Electron's
 fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(out, 'LICENSE-OpenPub.txt'));
+// update checks (desktop/appsrc/updater.js): where electron-updater looks for new versions. electron-builder only
+// writes app-update.yml when it packages the app itself; it skips that for a prepackaged folder, so write it here.
+// No publisherName yet: update signature checking stays off until the first signed release (1.3 brief, item 5).
+if (platform === 'win32') {
+  fs.writeFileSync(path.join(out, 'resources', 'app-update.yml'),
+    ['owner: sarinityx', 'repo: OpenPub', 'provider: github', 'updaterCacheDirName: openpub-updater', ''].join('\n'));
+}
 fs.mkdirSync(path.join(out, 'examples'), { recursive: true });
 for (const f of fs.readdirSync(path.join(DESKTOP, 'examples'))) fs.copyFileSync(path.join(DESKTOP, 'examples', f), path.join(out, 'examples', f));
 console.log('packaged', path.relative(ROOT, out));
@@ -83,7 +97,10 @@ if (installer && onWindows) {
       productName: 'OpenPub',
       electronVersion,
       directories: { app: APP, output: DIST, buildResources: RES },
-      win: { icon: path.join(RES, 'icon.ico'), signAndEditExecutable: false },
+      extraMetadata: versionOverride ? { version } : undefined,
+      // verifyUpdateCodeSignature is set explicitly (electron-builder 27 requires it without a publisherName):
+      // off until the first signed release sets publisherName (1.3 brief, items 3 and 5)
+      win: { icon: path.join(RES, 'icon.ico'), signAndEditExecutable: false, verifyUpdateCodeSignature: false },
       nsis: {
         oneClick: false,
         perMachine: false, // show the "Only for me" / "Anyone who uses this computer" page
@@ -99,6 +116,8 @@ if (installer && onWindows) {
         include: path.join(RES, 'installer.nsh'),
         artifactName: 'OpenPub-${version}-win64-setup.${ext}',
         differentialPackage: true, // writes the installer's .blockmap: electron-updater downloads only changed blocks
+        // per-machine updates need no elevate.exe: the silent update run of the installer asks Windows for
+        // administrator rights itself (UAC), and electron-updater falls back to running it elevated on EACCES
         packElevateHelper: false
       }
     }
