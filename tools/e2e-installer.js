@@ -152,6 +152,9 @@ async function checkUpdate(r) {
   const logFile = path.join(OUT, 'updater-' + (r.root === 'HKLM' ? 'machine' : 'user') + '.log');
   fs.rmSync(logFile, { force: true });
   const env = { OPENPUB_TEST_UPDATE_FEED: f.url, OPENPUB_TEST_UPDATE_DELAY: '500', OPENPUB_TEST_UPDATE_LOG: logFile };
+  // an update downloaded by an earlier run (the per-user one) sits in this user's updater cache and would be reused
+  // without downloading: clear it so every run downloads, differentially. installer.exe (the installed version) stays.
+  fs.rmSync(path.join(process.env.LOCALAPPDATA, 'openpub-updater', 'pending'), { recursive: true, force: true });
   const before = f.requests.length;
   const app = await lib.launchPackaged(r.exe, [], { profile, env });
   const page = await app.firstWindow();
@@ -178,7 +181,7 @@ async function checkUpdate(r) {
   await waitFor(() => !processesIn(r.dir).length, 15000);
   ok(!result.error && result.beforeAnswer === 0 && /OpenPub \d+\.\d+\.\d+ is available/.test(result.offer || ''), label + ': installed ' + VERSION + ' asks first (no request before the answer), then offers ' + NEXT + (result.error ? ' — ' + result.error : ''));
   const differential = /Download block maps/.test(result.log || '') && !/fallback to full download/i.test(result.log || '');
-  ok(differential, label + ': the download used the blockmaps (differential download)' + (differential ? '' : ': ' + (result.log || '').split('\n').filter((l) => /block|full|error/i.test(l)).slice(0, 3).join(' | ')));
+  ok(differential, label + ': the download used the blockmaps (differential download)' + (differential ? '' : '; updater log: ' + (result.log || '(empty)').trim().split('\n').slice(-6).join(' | ')));
   ok(updated && exeVersion.startsWith(NEXT) && restarted, label + ': Restart to update installs ' + NEXT + ' silently and starts it (installed version ' + exeVersion + ')');
   // the new version, with the same profile: settings and personal dictionary kept
   const app2 = await lib.launchPackaged(r.exe, [], { profile });
