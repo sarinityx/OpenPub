@@ -7,6 +7,8 @@
 //        dev       (running from source) – off
 // Policy: DisableUpdateCheck = 1 (REG_DWORD) under HKLM\SOFTWARE\Policies\OpenPub or HKCU\SOFTWARE\Policies\OpenPub
 //         turns everything off: no question, no checks, and "Check for updates" says the organisation manages updates.
+// Signatures: when resources/app-update.yml has publisherName (signed releases, tools/update-config.js), electron-updater
+//         refuses a download whose signature Windows does not accept or whose signer is not that certificate.
 // Settings (settings.json, "updates"): auto (true / false / null = not asked yet), skip (a version), lastCheck (ms).
 //
 // Test hooks (environment variables, used by tools/e2e-desktop.js and tools/e2e-installer.js only):
@@ -21,10 +23,12 @@ const { spawnSync } = require('child_process');
 const REPO_URL = 'https://github.com/sarinityx/OpenPub';
 const DAY = 24 * 60 * 60 * 1000;
 const env = process.env;
+// Windows' own tools by full path, not whatever comes first on PATH (Git Bash, for one, puts a different whoami first)
+const SYS32 = path.join(env.SystemRoot || 'C:\\Windows', 'System32');
 
 function regDword(root, key, name) {
   if (process.platform !== 'win32') return null;
-  const r = spawnSync('reg', ['query', root + '\\' + key, '/v', name], { encoding: 'utf8', windowsHide: true });
+  const r = spawnSync(path.join(SYS32, 'reg.exe'), ['query', root + '\\' + key, '/v', name], { encoding: 'utf8', windowsHide: true });
   const m = r.status === 0 && (r.stdout || '').match(/REG_DWORD\s+0x([0-9a-f]+)/i);
   return m ? parseInt(m[1], 16) : null;
 }
@@ -43,7 +47,7 @@ function policyOff() {
 const UNINSTALLER = path.join(path.dirname(process.execPath), 'Uninstall OpenPub.exe');
 function registeredIn(root) {
   if (process.platform !== 'win32') return false;
-  const r = spawnSync('reg', ['query', root + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', '/s', '/f', UNINSTALLER, '/d'], { encoding: 'utf8', windowsHide: true });
+  const r = spawnSync(path.join(SYS32, 'reg.exe'), ['query', root + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', '/s', '/f', UNINSTALLER, '/d'], { encoding: 'utf8', windowsHide: true });
   return r.status === 0 && /UninstallString\s+REG_\w+\s+"?[^\r\n]*Uninstall OpenPub\.exe/i.test(r.stdout || '');
 }
 let registration = null; // 'HKCU', 'HKLM' or null
@@ -64,7 +68,7 @@ function isPerMachine() {
 function isAdmin() {
   if (env.OPENPUB_TEST_UPDATE_NOT_ADMIN === '1') return false;
   if (process.platform !== 'win32') return true; // only reached by the tests' simulated installs on Linux
-  const r = spawnSync('whoami', ['/groups', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
+  const r = spawnSync(path.join(SYS32, 'whoami.exe'), ['/groups', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true });
   return r.status === 0 && /"S-1-5-32-544"/.test(r.stdout || '');
 }
 
@@ -139,6 +143,8 @@ module.exports = function setupUpdater(o) {
   }
   function friendly(e) {
     const m = String((e && e.message) || e || '');
+    // app-update.yml names the signing certificate (signed releases) and the download is not signed with it
+    if ((e && e.code === 'ERR_UPDATER_INVALID_SIGNATURE') || /not signed by the application owner/.test(m)) return 'The update was not installed: it is not signed by OpenPub\'s publisher.';
     if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|net::|getaddrinfo|socket/i.test(m)) return 'OpenPub could not reach GitHub. Check your internet connection and try again.';
     return 'The check did not finish: ' + m.split('\n')[0].slice(0, 200);
   }

@@ -153,7 +153,8 @@ async function checkPortable() {
   if (!fs.existsSync(zip)) { ok(false, 'portable zip not found: ' + path.relative(lib.ROOT, zip)); return; }
   const dir = path.join(OUT, 'portable');
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
-  cp.execFileSync('tar', ['-xf', zip, '-C', dir]);
+  // Windows' own tar (bsdtar reads zips); Git Bash puts GNU tar first on PATH, which cannot
+  cp.execFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', dir]);
   const exe = path.join(dir, 'OpenPub-win32-x64', 'OpenPub.exe');
   const baseEnv = { OPENPUB_TEST_UPDATE_FEED: f.url, OPENPUB_TEST_UPDATE_DELAY: '500' };
   const fresh = (name) => { const p = path.join(OUT, 'profile-' + name); fs.rmSync(p, { recursive: true, force: true }); return p; };
@@ -203,6 +204,40 @@ async function checkPortable() {
   } finally { reg(['delete', KEY, '/f']); }
 }
 
+/**
+ * Signed releases (1.3 brief, item 5): their app-update.yml names the signing certificate (publisherName), and an
+ * update not signed with it must not install. N+1 here is unsigned, so with a publisherName written into the
+ * installed copy's app-update.yml, the download is refused and N stays installed.
+ */
+async function checkSignatureRequired(r, env) {
+  const yml = path.join(r.dir, 'resources', 'app-update.yml'), original = fs.readFileSync(yml, 'utf8');
+  fs.writeFileSync(yml, require('./update-config').updateConfigYml('CN=OpenPub signature test, O=OpenPub'));
+  const profile = path.join(OUT, 'profile-signature');
+  fs.rmSync(profile, { recursive: true, force: true });
+  fs.rmSync(env.OPENPUB_TEST_UPDATE_LOG, { force: true });
+  const res = {};
+  const app = await lib.launchPackaged(r.exe, [], { profile, env });
+  try {
+    const page = await app.firstWindow();
+    await page.waitForSelector('#updnote:not([hidden]) #updYes', { timeout: 30000 });
+    await page.click('#updYes');
+    await page.waitForSelector('#updnote:not([hidden]) #updDownload', { timeout: 60000 });
+    await page.click('#updDownload');
+    await page.waitForFunction(() => /not signed by OpenPub/.test(document.getElementById('toasts').textContent), null, { timeout: 180000 });
+    res.toast = await page.evaluate(() => document.getElementById('toasts').textContent.trim());
+    res.state = await page.evaluate(() => OP.desktop.update.state());
+  } catch (e) { res.error = e.message.split('\n')[0]; } finally {
+    await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+    await waitFor(() => !processesIn(r.dir).length, 15000);
+    fs.writeFileSync(yml, original);
+  }
+  const log = fs.existsSync(env.OPENPUB_TEST_UPDATE_LOG) ? fs.readFileSync(env.OPENPUB_TEST_UPDATE_LOG, 'utf8') : '';
+  const u = findUninstall(r.root);
+  ok(!res.error && res.state && !res.state.downloaded && /not signed by the application owner/.test(log) && u && u.values.DisplayVersion === VERSION,
+    r.label + ': with publisherName in app-update.yml, an unsigned ' + NEXT + ' is refused and ' + VERSION + ' stays installed' +
+    (res.error ? ' — ' + res.error + '; updater log: ' + log.trim().split('\n').slice(-4).join(' | ') : ' (' + res.toast + ')'));
+}
+
 async function checkUpdate(r) {
   const f = await startFeed(), label = r.label;
   const profile = path.join(OUT, 'profile-' + (r.root === 'HKLM' ? 'machine' : 'user'));
@@ -214,8 +249,11 @@ async function checkUpdate(r) {
   // version's blockmap as current.blockmap, which the next differential download would take as the old one.
   // Keep only installer.exe, the copy of the installed version that this run's install just put there.
   const cache = path.join(process.env.LOCALAPPDATA, 'openpub-updater');
-  if (fs.existsSync(cache)) for (const e of fs.readdirSync(cache)) if (e !== 'installer.exe') fs.rmSync(path.join(cache, e), { recursive: true, force: true });
+  const cleanCache = () => { if (fs.existsSync(cache)) for (const e of fs.readdirSync(cache)) if (e !== 'installer.exe') fs.rmSync(path.join(cache, e), { recursive: true, force: true }); };
+  cleanCache();
   if (r.root === 'HKCU') {
+    await checkSignatureRequired(r, Object.assign({}, env, { OPENPUB_TEST_UPDATE_LOG: path.join(OUT, 'updater-signature.log') }));
+    cleanCache();
     // a copy of the installed folder (uninstaller included) is not the registered install: it counts as portable
     const copy = path.join(OUT, 'copied-install');
     fs.rmSync(copy, { recursive: true, force: true });
