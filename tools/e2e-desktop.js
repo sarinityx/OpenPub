@@ -541,7 +541,7 @@ const sh = lib.sh;
       return { asked, before, afterNo, status, offer, buttons, hidden: !(await noteText(p)) };
     });
     ok(/Check for updates automatically\?/.test(r.asked) && r.before === 0 && r.afterNo === 0, 'first start asks "Check for updates automatically?" and makes no request before the answer or after No (' + r.before + ', ' + r.afterNo + ')');
-    ok(/99\.0\.0 is available/.test(r.status) && requests.some(u => /latest\.yml/.test(u)), 'Check for updates works with automatic checks off: ' + r.status);
+    ok(/99\.0\.0 is available/.test(r.status) && requests.some(u => /latest(-linux)?\.yml/.test(u)), 'Check for updates works with automatic checks off: ' + r.status);
     ok(/OpenPub 99\.0\.0 is available/.test(r.offer) && r.buttons && r.hidden, 'the notice offers Download, What\'s new, Not now and Skip this version; Skip puts it away');
     const settings1 = JSON.parse(fs.readFileSync(path.join(p1, 'settings.json'), 'utf8')).updates;
     ok(settings1.auto === false && settings1.skip === '99.0.0', 'the answer and the skipped version are kept in the settings: ' + JSON.stringify(settings1));
