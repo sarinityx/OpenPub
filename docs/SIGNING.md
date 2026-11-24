@@ -37,7 +37,7 @@ The artifact configurations are copied in `.signpath/artifact-configurations/`. 
 3. **In GitHub**, under Settings › Secrets and variables › Actions:
    - Secret `SIGNPATH_API_TOKEN`: the API token.
    - Variable `SIGNPATH_ORGANIZATION_ID`: the organisation ID from SignPath. Setting it turns signing on.
-4. **Allow the action**, under Settings › Actions › General › Allow specified actions: add `SignPath/github-action-submit-signing-request@*`. The workflow pins it to a commit SHA, and Dependabot proposes updates as pull requests.
+4. **The action is already allowed** (done 25 November 2026): Settings › Actions › General lists `SignPath/github-action-submit-signing-request@*` beside GitHub's own actions. The workflow pins it to a commit SHA, and Dependabot proposes updates as pull requests.
 5. **Rehearse**: run Release with "Rehearsal" ticked, then approve the two test-signing requests. Check four things:
    - SignPath accepts the product name and version restrictions. The exe and installer give ProductVersion as text (`1.3.1`) and as a number (`1.3.1.0`). If SignPath compares the number, change `product-version` in both configurations, in SignPath and in the repository.
    - The zip's `resources/app-update.yml` has `publisherName`.
@@ -51,4 +51,4 @@ The artifact configurations are copied in `.signpath/artifact-configurations/`. 
 
 - **Every later release must be signed.** Installed copies of a signed release refuse an unsigned update with "The update was not installed: it is not signed by OpenPub's publisher." `tools/e2e-installer.js` checks this. If SignPath is unavailable, wait or tell users to update by hand.
 - **`publisherName` is the certificate's full subject.** A renewed certificate with the same subject is fine. If the subject changes, release one version with the old certificate whose `app-update.yml` lists both subjects (`tools/update-config.js` writes one today), then switch.
-- **Still open:** whether GitHub's allowed-actions setting refuses a run whose skipped `sign` job names an action that isn't on the allow list. A rehearsal after this change merges answers it, before 1.3.0. If it does refuse, allow the action before releasing.
+- **Keep the SignPath action on the allow list, even while signing is off.** GitHub checks every action a workflow names before the run starts, including actions in jobs that would be skipped. Without the allow-list entry, the release workflow fails at startup ("startup failure") and no release can be made. The first rehearsal after the `sign` job was added showed this; with the entry, the rehearsal passed with `sign` skipped.
