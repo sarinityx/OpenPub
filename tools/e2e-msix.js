@@ -173,9 +173,15 @@ async function quit(app) { await app.evaluate(({ app }) => app.exit(0)).catch(()
       const r = cp.spawnSync(APPCERT, ['test', '-appxpackagepath', signed, '-reportoutputpath', report], { encoding: 'utf8', timeout: 1800000, windowsHide: true });
       const xml = fs.existsSync(report) ? fs.readFileSync(report, 'utf8') : '';
       const overall = (xml.match(/OVERALL_RESULT="(\w+)"/) || [])[1] || 'no report (exit ' + r.status + ': ' + String(r.stdout || r.stderr || '').trim().split('\n').slice(-2).join(' ') + ')';
-      // each test: <TEST ... NAME="..." ...> ... <RESULT><![CDATA[FAIL]]></RESULT>
-      const failed = [...xml.matchAll(/<TEST\b[^>]*\bNAME="([^"]+)"[\s\S]*?<RESULT><!\[CDATA\[(\w+)\]\]><\/RESULT>/g)].filter((m) => !/^(PASS|NOT_RUN|WARNING)$/i.test(m[2])).map((m) => m[1] + ': ' + m[2]);
-      ok(overall === 'PASS', 'Windows App Certification Kit on the test-signed package: ' + overall + ' in ' + Math.round((Date.now() - t0) / 1000) + ' s' + (failed.length ? '; ' + failed.join('; ') : '') + ' (report: test-out/msix/wack-report.xml)');
+      // each test: <TEST ... NAME="..." ... OPTIONAL="TRUE|FALSE"> ... <RESULT><![CDATA[FAIL]]></RESULT>. An optional test
+      // does not decide the overall result: "Blocked executables" always flags Electron (process launch APIs, which
+      // OpenPub uses to run Ghostscript, and byte patterns in Chromium's files).
+      const tests = [...xml.matchAll(/<TEST\b([^>]*)>[\s\S]*?<RESULT><!\[CDATA\[(\w+)\]\]><\/RESULT>/g)]
+        .map((m) => ({ name: (m[1].match(/\bNAME="([^"]+)"/) || [])[1], optional: /\bOPTIONAL="TRUE"/i.test(m[1]), result: m[2] }))
+        .filter((t) => !/^(PASS|NOT_RUN)$/i.test(t.result));
+      const required = tests.filter((t) => !t.optional).map((t) => t.name + ': ' + t.result), optional = tests.filter((t) => t.optional).map((t) => t.name + ': ' + t.result);
+      ok(overall === 'PASS' && !required.length, 'Windows App Certification Kit on the test-signed package: ' + overall + ' in ' + Math.round((Date.now() - t0) / 1000) + ' s' +
+        (required.length ? '; required: ' + required.join('; ') : '') + (optional.length ? '; optional, not counted: ' + optional.join('; ') : '') + ' (report: test-out/msix/wack-report.xml)');
     }
   } catch (e) {
     ok(false, 'MSIX test stopped: ' + e.message.split('\n').slice(0, 4).join(' '));
