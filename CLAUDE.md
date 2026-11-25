@@ -42,7 +42,7 @@ Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publis
 - `tools/` – build, packaging and test scripts. `tools/lib.js` holds all paths and launch helpers. `tools/debug/` has parser dump scripts.
 - `test-data/publisher/` – sample `.pub` files from Apache POI.
 - `.signpath/artifact-configurations/` – copies of the SignPath artifact configurations (`app`, `installer`); keep them the same as SignPath's.
-- `docs/STATUS.md` – what is built, what is tested, known limits, backlog. `docs/THIRD-PARTY.md` – third-party licences (also the website's licence page).
+- `docs/STATUS.md` – what is built, what is tested, known limits, backlog. `docs/ROADMAP.md` – the plan after 1.3 (1.4 to 1.7) and the competitor review. `docs/THIRD-PARTY.md` – third-party licences (also the website's licence page).
 - `site/` – the website: `pages/*.html` (fragments with a `<!--page {...} -->` front matter), `assets/style.css`, `img/` (screenshots from `tools/site-screenshots.js`), `verification.json` (search engine verification tags). `tools/build-site.js` adds layout, metadata, JSON-LD, the latest release's download links, `sitemap.xml` and `robots.txt`; `tools/site-check.js` checks the result. `.github/workflows/pages.yml` deploys it to GitHub Pages. No scripts, tracking or remote fonts on the site.
 - Generated, not committed: `app/dist/`, `desktop/appsrc/app/`, `desktop/dist/`, `test-out/`, `_site/`.
 

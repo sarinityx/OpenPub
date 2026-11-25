@@ -97,5 +97,6 @@ Tables, linked text boxes, columns, WordArt, EMF pictures, mail merge, building 
 
 ## Backlog
 
-- Planned for 1.3: named paragraph and character styles, hyperlinks (also in exported PDF), spot colours, catalogue merge, properly bent WordArt, code signing, a Linux CI job.
+- Still to do for 1.3.0: code signing through SignPath Foundation (prepared and off; switched on after approval, `docs/SIGNING.md`), the Microsoft Store build, the 1.3.0 release.
+- After 1.3: see [ROADMAP.md](ROADMAP.md) (24 November 2026). 1.4: bulk conversion and command line, an online viewer on the website, import report and measured fidelity with font substitution, BorderArt patterns, Publisher 98 and 2000 files, Linux packages, small items. 1.5: tab stops and drop caps, styles, hyperlinks, label sheets, templates and brand kit, bent WordArt. 1.6: native PDF writer, PDF/X-4 and spot plates, alt text and tagged PDF, catalogue merge. 1.7: macOS, MCP server.
 - Per-cell table borders on import (needs a sample file); compound outlines; multi-column boxes and EMF pictures from real files (need sample files).
