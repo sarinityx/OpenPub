@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "installer" (copy of the one in SignPath; keep them the same).
+     The artifact is the NSIS installer alone, uploaded by release.yml as a zip. It was built from the folder signed
+     with the "app" configuration, so the OpenPub.exe inside it is already signed. The uninstaller that the installer
+     writes is not signed (NSIS creates it while building the installer, and SignPath cannot open an NSIS installer). -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="OpenPub-${version}-win64-setup.exe" product-name="OpenPub" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

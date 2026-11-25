@@ -586,6 +586,60 @@ const sh = lib.sh;
     server.close();
   }
 
+  // ---- 20. release signing (1.3 brief, item 5): the parts of release.yml's sign job that can run without SignPath
+  {
+    const yaml = require(path.join(lib.ROOT, 'desktop', 'appsrc', 'node_modules', 'js-yaml'));
+    const { updateConfigYml } = require('./update-config');
+    // app-update.yml as electron-updater reads it (js-yaml, its own parser): no publisherName until a signed release
+    const dn = 'CN=SignPath Foundation, O="Test, Inc.", L=Lewes, S=Delaware, C=US';
+    const plain = yaml.load(updateConfigYml(null)), signedCfg = yaml.load(updateConfigYml(dn));
+    ok(plain.provider === 'github' && plain.owner === 'sarinityx' && plain.repo === 'OpenPub' && !('publisherName' in plain) &&
+      Array.isArray(signedCfg.publisherName) && signedCfg.publisherName.length === 1 && signedCfg.publisherName[0] === dn,
+      'app-update.yml: no publisherName for unsigned builds; --publisher gives the certificate subject exactly, quotes and commas kept');
+
+    // signing changes the installer's bytes: release-signed.js remakes the blockmap and latest.yml to match
+    const { buildBlockMap } = require('app-builder-lib/out/targets/blockmap/blockmap');
+    const dir = path.join(OUT, 'release-signed'); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+    const V = '9.8.7', exe = path.join(dir, 'OpenPub-' + V + '-win64-setup.exe');
+    fs.writeFileSync(exe, require('crypto').randomBytes(400000));
+    const u = await buildBlockMap(exe, 'gzip', exe + '.blockmap');
+    fs.writeFileSync(path.join(dir, 'OpenPub-' + V + '-win64.zip'), 'zip');
+    fs.writeFileSync(path.join(dir, 'latest.yml'), 'version: ' + V + '\nfiles:\n  - url: OpenPub-' + V + '-win64-setup.exe\n    sha512: ' + u.sha512 + '\n    size: ' + u.size + '\npath: OpenPub-' + V + '-win64-setup.exe\nsha512: ' + u.sha512 + "\nreleaseDate: '2026-11-24T00:00:00.000Z'\n");
+    const rf = require('./release-files');
+    const before = rf.verify(dir, V).problems.length;
+    fs.appendFileSync(exe, require('crypto').randomBytes(9000)); // stands in for the signature
+    const stale = rf.verify(dir, V).problems.length;
+    const rs = await require('./release-signed').refresh(dir, V);
+    const bm = JSON.parse(require('zlib').gunzipSync(fs.readFileSync(exe + '.blockmap')));
+    const y2 = rf.readLatestYml(fs.readFileSync(path.join(dir, 'latest.yml'), 'utf8'));
+    ok(before === 0 && stale > 0 && !rs.problems.length && rs.before !== rs.sha512 && rs.size === 409000 &&
+      bm.files[0].sizes.reduce((a, b) => a + b, 0) === 409000 && y2.releaseDate === '2026-11-24T00:00:00.000Z',
+      'release-signed.js: after signing, the blockmap covers the signed installer and latest.yml has its SHA-512 and size (' + (rs.problems.join('; ') || rs.size + ' bytes') + ')');
+
+    const notes = require('./release-notes');
+    const attribution = /Free code signing provided by \[SignPath\.io\]\(https:\/\/about\.signpath\.io\), certificate by \[SignPath Foundation\]\(https:\/\/signpath\.org\)/;
+    ok(attribution.test(notes.notes('1.2.1', true, true)) && !attribution.test(notes.notes('1.2.1', true, false)) && /not code-signed/.test(notes.notes('1.2.1', true, false)),
+      'release notes: SignPath attribution only for a signed release (release.yml passes --signed)');
+
+    // the artifact configurations kept in the repository, against what the workflow and packaging produce
+    const cfg = (n) => fs.readFileSync(path.join(lib.ROOT, '.signpath', 'artifact-configurations', n + '.xml'), 'utf8').replace(/\r/g, '');
+    const app = cfg('app'), inst = cfg('installer'), pkg = fs.readFileSync(path.join(lib.ROOT, 'tools', 'package.mjs'), 'utf8');
+    const art = (pkg.match(/artifactName: '([^']+)'/) || [])[1] || '';
+    const cfgOk = (x, file) => /<artifact-configuration xmlns="http:\/\/signpath\.io\/artifact-configuration\/v1">/.test(x) && /<parameter name="version" required="true" \/>/.test(x) &&
+      x.includes('<zip-file>\n    <pe-file path="' + file + '" product-name="OpenPub" product-version="${version}">\n      <authenticode-sign />');
+    ok(cfgOk(app, 'OpenPub.exe') && cfgOk(inst, art.replace('${ext}', 'exe')) && art === 'OpenPub-${version}-win64-setup.${ext}',
+      '.signpath artifact configurations: OpenPub.exe and ' + art + ', product name OpenPub, product version from the release');
+
+    // release.yml: every action pinned to a full commit SHA; signing only when set up, with the configurations above
+    const rel = fs.readFileSync(path.join(lib.ROOT, '.github', 'workflows', 'release.yml'), 'utf8'), wf = yaml.load(rel);
+    const uses = [...rel.matchAll(/uses:\s*(\S+)/g)].map((m) => m[1]).filter((x) => !x.startsWith('./'));
+    const sp = wf.jobs.sign.steps.filter((s) => /^SignPath\/github-action-submit-signing-request@[0-9a-f]{40}$/.test(s.uses || ''));
+    ok(uses.length > 0 && uses.every((x) => /@[0-9a-f]{40}$/.test(x)) && wf.jobs.sign.if === "${{ needs.check.outputs.signing == 'true' }}" &&
+      sp.map((s) => s.with['artifact-configuration-slug']).join() === 'app,installer' && wf.jobs.build.with.sign === "${{ needs.check.outputs.signing == 'true' }}" &&
+      /needs\.sign\.result == 'success'/.test(wf.jobs.publish.if) && !wf.jobs.sign.permissions['contents'].includes('write'),
+      'release.yml: actions pinned to commit SHAs; the sign job runs only when SignPath is set up and signs with the "app" and "installer" configurations');
+  }
+
   // CI sets OPENPUB_REQUIRE_ALL so that a missing inspection tool fails the run instead of skipping quietly
   if (skipped && process.env.OPENPUB_REQUIRE_ALL) ok(false, skipped + ' group(s) skipped, but OPENPUB_REQUIRE_ALL is set');
   console.log((failures ? failures + ' FAILED' : 'ALL PASSED') + (skipped ? ', ' + skipped + ' group(s) skipped' : ''));

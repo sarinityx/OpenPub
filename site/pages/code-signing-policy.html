@@ -11,8 +11,9 @@
   <h2 id="what">What is signed</h2>
   <ul>
     <li><code>OpenPub.exe</code>, the program itself</li>
-    <li>The installer, <code>OpenPub-&lt;version&gt;-win64-setup.exe</code>, and its uninstaller where possible</li>
+    <li>The installer, <code>OpenPub-&lt;version&gt;-win64-setup.exe</code></li>
   </ul>
+  <p>The uninstaller that the installer puts beside the program, <code>Uninstall OpenPub.exe</code>, is not signed: it is made inside the installer while the installer is built, where signing cannot reach it.</p>
   <p>Only files built from OpenPub's own source code are signed. Electron's files that ship with the app are included unchanged from the Electron project.</p>
 
   <h2 id="build">How releases are built</h2>
@@ -20,6 +21,7 @@
     <li>All source code, build scripts and build settings are public, in the <a href="{{repoUrl}}">sarinityx/OpenPub</a> repository under the MIT licence.</li>
     <li>Release files are built by GitHub Actions on GitHub-hosted runners, from the repository, by the release workflow. They are not built on a personal computer.</li>
     <li>Every change reaches the main branch through a pull request that must pass the automated tests. Direct pushes and history rewrites are blocked.</li>
+    <li>Signing is part of the release workflow: <code>OpenPub.exe</code> is signed first, the installer and the portable zip are built from the signed program, then the installer is signed. The signing configurations are in the repository's <a href="{{repoUrl}}/tree/main/.signpath"><code>.signpath</code> folder</a>.</li>
     <li>Every signing request is approved by hand before anything is signed.</li>
     <li>Published releases cannot be changed afterwards: release files and tags are immutable on GitHub. A mistake is fixed with a new version.</li>
   </ul>
@@ -35,5 +37,6 @@
   <p>OpenPub sends no information to other networked systems unless the user or the person managing it asks it to: the only such request is the optional update check. Details are on the <a href="privacy.html">privacy page</a>.</p>
 
   <h2 id="verify">Checking a signature</h2>
+  <p>From the first signed release, OpenPub's update check installs an update only if Windows accepts its signature and it is signed with the same certificate as the version you have.</p>
   <p>For a signed release, right-click the installer or <code>OpenPub.exe</code> in File Explorer, choose <b>Properties</b>, then the <b>Digital Signatures</b> tab. The signer should be SignPath Foundation.</p>
 </div>
