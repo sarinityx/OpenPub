@@ -27,8 +27,12 @@ const ALIAS = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApp
 /** Windows PowerShell, the script passed encoded (no quoting through the shell); returns trimmed stdout, throws on error. */
 function ps(script) {
   const r = cp.spawnSync(path.join(SYS32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-    ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from("$ErrorActionPreference = 'Stop'\n$ProgressPreference = 'SilentlyContinue'\n" + script, 'utf16le').toString('base64')],
-    { encoding: 'utf8', windowsHide: true, timeout: 600000 });
+    ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from("$ErrorActionPreference = 'Stop'\n$ProgressPreference = 'SilentlyContinue'\n" +
+      // the Cert: drive comes with this module, and using the drive does not load it
+      'Import-Module Microsoft.PowerShell.Security\n' + script, 'utf16le').toString('base64')],
+    // without PSModulePath: started from PowerShell 7 (CI's shell), Windows PowerShell would inherit 7's module path,
+    // load the wrong security module and have no Cert: drive
+    { encoding: 'utf8', windowsHide: true, timeout: 600000, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PSMODULEPATH')) });
   if (r.status !== 0) {
     // with -EncodedCommand, errors come back as CLIXML: keep the error lines' text
     const err = r.stderr || '', lines = [...err.matchAll(/<S S="Error">([\s\S]*?)<\/S>/g)].map((m) => m[1].replace(/_x000D__x000A_/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim()).filter(Boolean);
