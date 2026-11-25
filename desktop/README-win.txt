@@ -1,4 +1,4 @@
-OpenPub 1.2.1 - a page-layout editor that opens Microsoft Publisher (.pub) files
+OpenPub 1.3.0 - a page-layout editor that opens Microsoft Publisher (.pub) files
 ================================================================================
 
 INSTALL
@@ -16,6 +16,8 @@ INSTALL
       OpenPub-<version>-win64-setup.exe /S /allusers       (all users, as administrator)
     Silent uninstall: "Uninstall OpenPub.exe" /S in the install folder; add
     --delete-app-data to remove settings too.
+    Updates: if you said yes to update checks, a new version is downloaded
+    when you choose Download and installed when you restart or close OpenPub.
 
   Portable folder (OpenPub-<version>-win64.zip)
     Unzip and double-click OpenPub.exe. Nothing is installed; keep the folder
@@ -45,7 +47,8 @@ PRIVACY
   then once a day at most. File > Check for updates checks once when you ask.
   It sends no information about you or your files. Organisations can turn
   checks off: DisableUpdateCheck = 1 (REG_DWORD) under
-  HKEY_LOCAL_MACHINE\SOFTWARE\Policies\OpenPub. Windows may also download a
+  HKEY_LOCAL_MACHINE\SOFTWARE\Policies\OpenPub (everyone) or
+  HKEY_CURRENT_USER\SOFTWARE\Policies\OpenPub (one user). Windows may also download a
   spelling dictionary for the red underlines if the English (Australia)
   language pack is not installed. Details: sarinityx.github.io/OpenPub/privacy.html
 

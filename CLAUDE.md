@@ -1,6 +1,6 @@
 # OpenPub
 
-Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publisher `.pub` files. Replacement for Publisher, which Microsoft retires in October 2026. Current version: 1.2.1.
+Desktop page-layout editor (Electron, Windows first) that opens Microsoft Publisher `.pub` files. Replacement for Publisher, which Microsoft retired in October 2026. Current version: 1.3.0.
 
 ## Commands
 
