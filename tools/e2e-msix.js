@@ -27,9 +27,13 @@ const ALIAS = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApp
 /** Windows PowerShell, the script passed encoded (no quoting through the shell); returns trimmed stdout, throws on error. */
 function ps(script) {
   const r = cp.spawnSync(path.join(SYS32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-    ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from("$ErrorActionPreference = 'Stop'\n" + script, 'utf16le').toString('base64')],
+    ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from("$ErrorActionPreference = 'Stop'\n$ProgressPreference = 'SilentlyContinue'\n" + script, 'utf16le').toString('base64')],
     { encoding: 'utf8', windowsHide: true, timeout: 600000 });
-  if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'PowerShell failed').trim().split('\n').slice(0, 4).join(' '));
+  if (r.status !== 0) {
+    // with -EncodedCommand, errors come back as CLIXML: keep the error lines' text
+    const err = r.stderr || '', lines = [...err.matchAll(/<S S="Error">([\s\S]*?)<\/S>/g)].map((m) => m[1].replace(/_x000D__x000A_/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim()).filter(Boolean);
+    throw new Error((lines.length ? lines.join(' ') : (err || r.stdout || 'PowerShell failed')).trim().slice(0, 600));
+  }
   return (r.stdout || '').trim();
 }
 const q = (s) => "'" + String(s).replace(/'/g, "''") + "'"; // a PowerShell single-quoted string
@@ -71,8 +75,9 @@ async function quit(app) { await app.evaluate(({ app }) => app.exit(0)).catch(()
   fs.copyFileSync(MSIX, signed);
   const pfx = path.join(OUT, 'test-cert.pfx'), cer = path.join(OUT, 'test-cert.cer'), pass = crypto.randomBytes(18).toString('base64');
   const thumb = ps([
-    '$c = New-SelfSignedCertificate -Type Custom -Subject ' + q(STORE.publisher) + ' -KeyUsage DigitalSignature -FriendlyName ' + q('OpenPub MSIX test (throwaway)'),
-    '  -CertStoreLocation Cert:\\CurrentUser\\My -NotAfter (Get-Date).AddDays(1) -TextExtension @(' + q('2.5.29.37={text}1.3.6.1.5.5.7.3.3') + ', ' + q('2.5.29.19={text}') + ')',
+    // one line: PowerShell does not carry a command over to the next line
+    '$c = New-SelfSignedCertificate -Type Custom -Subject ' + q(STORE.publisher) + ' -KeyUsage DigitalSignature -FriendlyName ' + q('OpenPub MSIX test (throwaway)') +
+      ' -CertStoreLocation Cert:\\CurrentUser\\My -NotAfter (Get-Date).AddDays(1) -TextExtension @(' + q('2.5.29.37={text}1.3.6.1.5.5.7.3.3') + ', ' + q('2.5.29.19={text}') + ')',
     'Export-PfxCertificate -Cert $c -FilePath ' + q(pfx) + ' -Password (ConvertTo-SecureString ' + q(pass) + ' -AsPlainText -Force) | Out-Null',
     'Export-Certificate -Cert $c -FilePath ' + q(cer) + ' | Out-Null',
     'Import-Certificate -FilePath ' + q(cer) + ' -CertStoreLocation Cert:\\LocalMachine\\TrustedPeople | Out-Null',
