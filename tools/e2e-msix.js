@@ -23,6 +23,8 @@ const STORE = JSON.parse(fs.readFileSync(path.join(lib.ROOT, 'desktop', 'build',
 const OUT = lib.outDir('msix');
 const SYS32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
 const ALIAS = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps', 'OpenPub.exe');
+// the alias is an app execution link (a reparse point) that stat cannot follow: look at the link itself
+function aliasPresent() { try { fs.lstatSync(ALIAS); return true; } catch (e) { return false; } }
 
 /** Windows PowerShell, the script passed encoded (no quoting through the shell); returns trimmed stdout, throws on error. */
 function ps(script) {
@@ -97,7 +99,7 @@ async function quit(app) { await app.evaluate(({ app }) => app.exit(0)).catch(()
     try { ps('Add-AppxPackage -Path ' + q(signed)); } catch (e) { installErr = e.message; }
     const info = installErr ? null : JSON.parse(ps('Get-AppxPackage -Name ' + q(STORE.identityName) + ' | Select-Object PackageFamilyName, InstallLocation, Version | ConvertTo-Json'));
     pfn = info && info.PackageFamilyName;
-    ok(!!info && info.Version === VERSION + '.0' && fs.existsSync(ALIAS), 'installs: ' + (info ? info.PackageFamilyName + ' ' + info.Version + ', alias ' + (fs.existsSync(ALIAS) ? 'present' : 'MISSING') : installErr));
+    ok(!!info && info.Version === VERSION + '.0' && aliasPresent(), 'installs: ' + (info ? info.PackageFamilyName + ' ' + info.Version + ', alias ' + (aliasPresent() ? 'present' : 'MISSING') : installErr));
     if (!info) throw new Error('not installed, so nothing inside the package was checked');
     const exts = ps('$p = Get-AppxPackage -Name ' + q(STORE.identityName) + '; (Get-AppxPackageManifest $p).Package.Applications.Application.Extensions.Extension | ForEach-Object { $_.Category + ":" + ($_.FileTypeAssociation.Name) }');
     ok(/windows\.fileTypeAssociation:opub/.test(exts) && /windows\.fileTypeAssociation:pub/.test(exts), 'Windows registered the .opub and .pub file types: ' + exts.replace(/\s+/g, ' '));
@@ -157,7 +159,7 @@ async function quit(app) { await app.evaluate(({ app }) => app.exit(0)).catch(()
     ps('Get-AppxPackage -Name ' + q(STORE.identityName) + ' | Remove-AppxPackage');
     pfn = null;
     const gone = await waitFor(() => !fs.existsSync(dataDir) && !ps('(Get-AppxPackage -Name ' + q(STORE.identityName) + ').PackageFullName'), 60000);
-    ok(gone && !fs.existsSync(ALIAS), 'uninstall removes the app, its alias and its settings, dictionary and stored plug-ins');
+    ok(gone && !aliasPresent(), 'uninstall removes the app, its alias and its settings, dictionary and stored plug-ins');
   } catch (e) {
     ok(false, 'MSIX test stopped: ' + e.message.split('\n').slice(0, 4).join(' '));
   } finally {
