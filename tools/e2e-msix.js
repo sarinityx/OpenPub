@@ -160,6 +160,23 @@ async function quit(app) { await app.evaluate(({ app }) => app.exit(0)).catch(()
     pfn = null;
     const gone = await waitFor(() => !fs.existsSync(dataDir) && !ps('(Get-AppxPackage -Name ' + q(STORE.identityName) + ').PackageFullName'), 60000);
     ok(gone && !aliasPresent(), 'uninstall removes the app, its alias and its settings, dictionary and stored plug-ins');
+
+    // ---- Microsoft's local Store certification check (Windows App Certification Kit, in the Windows SDK). It installs
+    // and removes the package itself; the report is kept in test-out/msix for the CI artifact.
+    const APPCERT = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Windows Kits', '10', 'App Certification Kit', 'appcert.exe');
+    if (!fs.existsSync(APPCERT)) skip('Windows App Certification Kit not installed (it comes with the Windows SDK; CI has it)');
+    else {
+      const report = path.join(OUT, 'wack-report.xml');
+      fs.rmSync(report, { force: true });
+      cp.spawnSync(APPCERT, ['reset'], { stdio: 'ignore', timeout: 120000 });
+      const t0 = Date.now();
+      const r = cp.spawnSync(APPCERT, ['test', '-appxpackagepath', signed, '-reportoutputpath', report], { encoding: 'utf8', timeout: 1800000, windowsHide: true });
+      const xml = fs.existsSync(report) ? fs.readFileSync(report, 'utf8') : '';
+      const overall = (xml.match(/OVERALL_RESULT="(\w+)"/) || [])[1] || 'no report (exit ' + r.status + ': ' + String(r.stdout || r.stderr || '').trim().split('\n').slice(-2).join(' ') + ')';
+      // each test: <TEST ... NAME="..." ...> ... <RESULT><![CDATA[FAIL]]></RESULT>
+      const failed = [...xml.matchAll(/<TEST\b[^>]*\bNAME="([^"]+)"[\s\S]*?<RESULT><!\[CDATA\[(\w+)\]\]><\/RESULT>/g)].filter((m) => !/^(PASS|NOT_RUN|WARNING)$/i.test(m[2])).map((m) => m[1] + ': ' + m[2]);
+      ok(overall === 'PASS', 'Windows App Certification Kit on the test-signed package: ' + overall + ' in ' + Math.round((Date.now() - t0) / 1000) + ' s' + (failed.length ? '; ' + failed.join('; ') : '') + ' (report: test-out/msix/wack-report.xml)');
+    }
   } catch (e) {
     ok(false, 'MSIX test stopped: ' + e.message.split('\n').slice(0, 4).join(' '));
   } finally {
