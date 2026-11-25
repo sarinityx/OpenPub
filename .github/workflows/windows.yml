@@ -32,7 +32,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 75 # about 20 for the tests and packaging, plus the Windows App Certification Kit
     outputs:
       app-artifact-id: ${{ steps.app.outputs.artifact-id }}
     env:
@@ -132,6 +132,23 @@ jobs:
       # installs silently per user and per machine, opens files through the associations, uninstalls
       - name: Installer tests
         run: npm run test:installer
+
+      # the Microsoft Store package: test-signed with a throwaway certificate, installed, checked inside the package
+      # (Store mode, data redirected and removed on uninstall, file types, alias, Ghostscript, PDF), uninstalled, then
+      # put through the Windows App Certification Kit (in the runner image's Windows SDK)
+      - name: MSIX tests
+        timeout-minutes: 45
+        run: npm run test:msix
+      # The unsigned Store package for Partner Center (the Store signs it). desktop/build/store.json holds placeholder
+      # values until the owner adds the reserved identity, and a package built with them cannot be submitted.
+      - name: Upload Store package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: OpenPub-store-package
+          path: desktop/dist/OpenPub-*-x64.msix
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
 
       # For trying out a pull request's build. Artifacts expire; releases (with the installer
       # and zip attached) are the downloads for users.

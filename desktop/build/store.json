@@ -1,0 +1,7 @@
+{
+  "_comment": "Microsoft Store package identity, from the app's reservation in Partner Center (Product identity page). Not secrets. While placeholder is true, the values are stand-ins: the package installs for testing but cannot be submitted to the Store.",
+  "placeholder": true,
+  "identityName": "OpenPubPlaceholder.OpenPub",
+  "publisher": "CN=OpenPub Placeholder",
+  "publisherDisplayName": "OpenPub"
+}

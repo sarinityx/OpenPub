@@ -34,8 +34,9 @@ function startDir() {
   try { return app.getPath('documents'); } catch (e) { return os.homedir(); }
 }
 
-// the same ID as the installer's Start menu shortcut, so Windows groups the window with it on the taskbar
-if (process.platform === 'win32') app.setAppUserModelId('org.openpub.desktop');
+// the same ID as the installer's Start menu shortcut, so Windows groups the window with it on the taskbar. Not in the
+// Microsoft Store package: Windows gives it the package's own ID, which pinning and the Start tile depend on.
+if (process.platform === 'win32' && !process.windowsStore) app.setAppUserModelId('org.openpub.desktop');
 
 // One window. A file double-clicked while OpenPub is open goes to that window, which asks about unsaved changes.
 if (!app.requestSingleInstanceLock()) {

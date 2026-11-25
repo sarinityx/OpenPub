@@ -640,6 +640,28 @@ const sh = lib.sh;
       'release.yml: actions pinned to commit SHAs; the sign job runs only when SignPath is set up and signs with the "app" and "installer" configurations');
   }
 
+  // ---- 21. Microsoft Store package (1.3 brief, item 6): what package.mjs feeds electron-builder. tools/e2e-msix.js
+  // installs the built package on Windows and checks the app inside it.
+  {
+    const B = path.join(lib.ROOT, 'desktop', 'build');
+    const store = JSON.parse(fs.readFileSync(path.join(B, 'store.json'), 'utf8'));
+    const tpl = fs.readFileSync(path.join(B, 'appxmanifest.xml'), 'utf8');
+    const comments = tpl.match(/<!--[\s\S]*?-->/g) || [];
+    ok(/^CN=/.test(store.publisher) && /^[A-Za-z0-9.-]{3,50}$/.test(store.identityName) && !!store.publisherDisplayName && typeof store.placeholder === 'boolean' &&
+      ['identityName', 'publisher', 'publisherDisplayName', 'version', 'arch', 'executable'].every((v) => tpl.includes('${' + v + '}')) &&
+      comments.every((c) => !c.slice(4, -3).includes('--')),
+      'MSIX manifest template: identity from store.json (' + (store.placeholder ? 'placeholder' : store.identityName) + '), no "--" inside XML comments');
+    ok(/<uap:FileTypeAssociation Name="opub">[\s\S]*?<uap:Logo>assets\\opubfile\.png<\/uap:Logo>[\s\S]*?\.opub</.test(tpl) && /<uap:FileTypeAssociation Name="pub">[\s\S]*?>\.pub</.test(tpl) &&
+      !/AllowSilentDefaultTakeOver/.test(tpl) && /<desktop:ExecutionAlias Alias="OpenPub\.exe" \/>/.test(tpl),
+      'MSIX file types: .opub with its own logo, .pub offered (never taken over), and the OpenPub.exe command-line alias');
+    // PNG width and height from the IHDR chunk
+    const size = (f) => { const b = fs.readFileSync(path.join(B, 'appx', f)); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); };
+    const want = { 'StoreLogo.png': '50x50', 'Square44x44Logo.png': '44x44', 'Square150x150Logo.png': '150x150', 'Wide310x150Logo.png': '310x150', 'opubfile.png': '44x44',
+      'Square44x44Logo.targetsize-24_altform-unplated.png': '24x24', 'Square44x44Logo.targetsize-256.png': '256x256', 'opubfile.targetsize-32.png': '32x32' };
+    const bad = Object.keys(want).filter((f) => !fs.existsSync(path.join(B, 'appx', f)) || size(f) !== want[f]);
+    ok(!bad.length, 'MSIX tiles and logos in desktop/build/appx at their sizes' + (bad.length ? ': wrong or missing ' + bad.join(', ') : ''));
+  }
+
   // CI sets OPENPUB_REQUIRE_ALL so that a missing inspection tool fails the run instead of skipping quietly
   if (skipped && process.env.OPENPUB_REQUIRE_ALL) ok(false, skipped + ' group(s) skipped, but OPENPUB_REQUIRE_ALL is set');
   console.log((failures ? failures + ' FAILED' : 'ALL PASSED') + (skipped ? ', ' + skipped + ' group(s) skipped' : ''));

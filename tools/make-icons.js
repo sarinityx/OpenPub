@@ -2,6 +2,9 @@
 //   icon.ico  the app (OpenPub.exe, shortcuts, installer)
 //   opub.ico  an OpenPub project or Publisher file opened with OpenPub
 // Each .ico holds 16–64 px as 32-bit bitmaps and 256 px as PNG. Needs Google Chrome (see tools/lib.js).
+//   appx/     the Microsoft Store package's tiles and logos (tools/package.mjs --msix): the app artwork, and the
+//             document artwork as the logo of the file types (opubfile.*). Sizes and names follow the MSIX asset rules:
+//             targetsize-N for the taskbar, Start and File Explorer, altform-unplated without the tile colour behind.
 const fs = require('fs'), path = require('path'), lib = require('./lib');
 
 const OUT = path.join(lib.ROOT, 'desktop', 'build');
@@ -79,5 +82,24 @@ function ico(images) {
     fs.writeFileSync(path.join(OUT, name), ico(images));
     console.log('wrote', path.relative(lib.ROOT, path.join(OUT, name)), SIZES.join(', ') + ' px');
   }
+  // the Store package's assets: art drawn into a box of the given size, centred on a transparent w x h canvas
+  async function png(svg, w, h, box) {
+    return Buffer.from(await page.evaluate(async ({ svg, w, h, box }) => {
+      const im = new Image(); im.src = 'data:image/svg+xml;base64,' + btoa(svg); await im.decode();
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(im, (w - box) / 2, (h - box) / 2, box, box);
+      return c.toDataURL('image/png').split(',')[1];
+    }, { svg, w, h, box }), 'base64');
+  }
+  const APPX = path.join(OUT, 'appx');
+  fs.rmSync(APPX, { recursive: true, force: true }); fs.mkdirSync(APPX, { recursive: true });
+  const assets = [['StoreLogo.png', appSvg, 50, 50, 50], ['Square44x44Logo.png', appSvg, 44, 44, 44],
+    ['Square150x150Logo.png', appSvg, 150, 150, 96], ['Wide310x150Logo.png', appSvg, 310, 150, 96], ['opubfile.png', docSvg, 44, 44, 44]];
+  for (const s of [16, 24, 32, 48, 256]) {
+    assets.push(['Square44x44Logo.targetsize-' + s + '.png', appSvg, s, s, s], ['Square44x44Logo.targetsize-' + s + '_altform-unplated.png', appSvg, s, s, s],
+      ['opubfile.targetsize-' + s + '.png', docSvg, s, s, s]);
+  }
+  for (const [name, art, w, h, box] of assets) fs.writeFileSync(path.join(APPX, name), await png(art(box), w, h, box));
+  console.log('wrote', assets.length, 'files in', path.relative(lib.ROOT, APPX));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -120,7 +120,7 @@ async function startFeed() {
   if (feed) return feed;
   const nextOut = path.join(OUT, 'next');
   fs.rmSync(nextOut, { recursive: true, force: true });
-  cp.execFileSync(process.execPath, [path.join(lib.ROOT, 'tools', 'package.mjs'), 'win32', '--no-zip', '--version', NEXT, '--out', nextOut], { stdio: 'ignore', timeout: 900000 });
+  cp.execFileSync(process.execPath, [path.join(lib.ROOT, 'tools', 'package.mjs'), 'win32', '--no-zip', '--no-msix', '--version', NEXT, '--out', nextOut], { stdio: 'ignore', timeout: 900000 });
   const dir = path.join(OUT, 'feed');
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
   for (const f of ['latest.yml', 'OpenPub-' + NEXT + '-win64-setup.exe', 'OpenPub-' + NEXT + '-win64-setup.exe.blockmap']) fs.copyFileSync(path.join(nextOut, f), path.join(dir, f));
