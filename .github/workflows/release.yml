@@ -162,7 +162,7 @@ jobs:
         env:
           PUBLISHER: ${{ steps.cert.outputs.publisher }}
         run: |
-          node tools/package.mjs win32 --from-folder --publisher "$env:PUBLISHER"
+          node tools/package.mjs win32 --from-folder --no-msix --publisher "$env:PUBLISHER"
           if ($LASTEXITCODE -ne 0) { throw 'package.mjs failed' }
 
       - name: Upload the installer for signing

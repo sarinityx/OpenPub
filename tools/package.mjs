@@ -1,8 +1,9 @@
-// Packages the desktop app into desktop/dist/OpenPub-<platform>-<arch>/, zips it and, for Windows, builds the installer.
+// Packages the desktop app into desktop/dist/OpenPub-<platform>-<arch>/, zips it and, for Windows, builds the installer
+// and the Microsoft Store package (OpenPub-<version>-x64.msix).
 //   node tools/package.mjs            -> current platform, x64
 //   node tools/package.mjs win32      -> Windows x64: folder, zip and installer (the installer and the exe icon need Windows)
 //   node tools/package.mjs linux --no-zip
-//   --no-zip, --no-installer          -> skip those steps
+//   --no-zip, --no-installer, --no-msix -> skip those steps
 //   --version 9.9.9 --out DIR         -> build as another version into another folder (tools/e2e-installer.js uses
 //                                        this to make the "next" version it updates to); the repository is not changed
 //   --publisher "CN=..., O=..."       -> app-update.yml names the signing certificate: updates must be signed by it
@@ -27,6 +28,7 @@ const arch = 'x64';
 const zip = !args.includes('--no-zip');
 const onWindows = process.platform === 'win32';
 const installer = platform === 'win32' && !args.includes('--no-installer');
+const msix = platform === 'win32' && !args.includes('--no-msix');
 const version = argValue('--version') || require(path.join(APP, 'package.json')).version;
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('--version must look like 1.2.3');
 const versionOverride = version !== require(path.join(APP, 'package.json')).version;
@@ -145,4 +147,44 @@ if (installer && onWindows) {
     }
   });
   for (const f of files.filter((f) => f.endsWith('.exe'))) console.log('installer', path.relative(ROOT, f), (fs.statSync(f).size / 1e6).toFixed(0) + ' MB');
+}
+
+// 7. Microsoft Store package (MSIX, 1.3 brief item 6), from the same packaged folder. Unsigned: the Store signs it
+// when it is published; tools/e2e-msix.js test-signs a copy with a throwaway certificate to install it.
+// The identity comes from the Partner Center reservation (desktop/build/store.json); the manifest, with the file types
+// and the command-line alias, is desktop/build/appxmanifest.xml; tiles and logos are desktop/build/appx/ (make-icons.js).
+// In the package, process.windowsStore is true: no update checks (updater.js) and no own taskbar ID (main.js).
+if (msix && !onWindows) console.log('Not on Windows: skipping the MSIX.');
+if (msix && onWindows) {
+  const store = JSON.parse(fs.readFileSync(path.join(RES, 'store.json'), 'utf8'));
+  const { build, Platform, Arch } = (await import('electron-builder')).default;
+  const files = await build({
+    projectDir: ROOT,
+    prepackaged: out,
+    targets: Platform.WINDOWS.createTarget('appx', Arch.x64),
+    publish: 'never',
+    config: {
+      appId: 'org.openpub.desktop',
+      productName: 'OpenPub',
+      electronVersion,
+      directories: { app: APP, output: DIST, buildResources: RES },
+      extraMetadata: versionOverride ? { version } : undefined,
+      toolsets: { winCodeSign: '1.1.0' }, // makeappx and makepri from the Windows SDK 10.0.26100 (the default is from 2017)
+      win: { signAndEditExecutable: false },
+      appx: {
+        identityName: store.identityName,
+        publisher: store.publisher,
+        publisherDisplayName: store.publisherDisplayName,
+        applicationId: 'OpenPub',
+        displayName: 'OpenPub',
+        backgroundColor: 'transparent',
+        languages: ['en-AU'],
+        minVersion: '10.0.17763.0', // Windows 10 1809, the oldest the Store still offers apps to
+        maxVersionTested: '10.0.26100.0', // Windows 11 24H2
+        customManifestPath: 'appxmanifest.xml',
+        artifactName: 'OpenPub-${version}-x64.msix'
+      }
+    }
+  });
+  for (const f of files.filter((f) => f.endsWith('.msix'))) console.log('msix', path.relative(ROOT, f), (fs.statSync(f).size / 1e6).toFixed(0) + ' MB' + (store.placeholder ? ' (placeholder identity in desktop/build/store.json: for testing, not for the Store)' : ''));
 }

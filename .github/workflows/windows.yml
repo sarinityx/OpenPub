@@ -133,6 +133,28 @@ jobs:
       - name: Installer tests
         run: npm run test:installer
 
+      # the Microsoft Store package: test-signed with a throwaway certificate, installed, checked inside the package
+      # (Store mode, data redirected and removed on uninstall, file types, alias, Ghostscript, PDF), uninstalled
+      - name: MSIX tests
+        run: npm run test:msix
+
+      # Microsoft's local certification check, when this runner image has the kit (reported, not yet required)
+      - name: Look for the Windows App Certification Kit
+        run: |
+          $kit = 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit\appcert.exe'
+          if (Test-Path $kit) { "found: $kit $((Get-Item $kit).VersionInfo.ProductVersion)" } else { 'not installed on this runner image' }
+
+      # The unsigned Store package for Partner Center (the Store signs it). desktop/build/store.json holds placeholder
+      # values until the owner adds the reserved identity, and a package built with them cannot be submitted.
+      - name: Upload Store package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: OpenPub-store-package
+          path: desktop/dist/OpenPub-*-x64.msix
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
       # For trying out a pull request's build. Artifacts expire; releases (with the installer
       # and zip attached) are the downloads for users.
       - name: Upload installer

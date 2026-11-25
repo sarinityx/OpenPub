@@ -27,7 +27,7 @@ npm start
 npm run package:win
 ```
 
-Output in `desktop/dist/`: the portable folder `OpenPub-win32-x64/`, its zip `OpenPub-<version>-win64.zip`, and the installer `OpenPub-<version>-win64-setup.exe` (built on Windows only; per user or per machine, silent with `/S /currentuser` or `/S /allusers`). Nothing is code-signed.
+Output in `desktop/dist/`: the portable folder `OpenPub-win32-x64/`, its zip `OpenPub-<version>-win64.zip`, and the installer `OpenPub-<version>-win64-setup.exe` (built on Windows only; per user or per machine, silent with `/S /currentuser` or `/S /allusers`), and the Microsoft Store package `OpenPub-<version>-x64.msix` (Windows only; the Store signs it). Nothing is code-signed.
 
 ## Tests
 
